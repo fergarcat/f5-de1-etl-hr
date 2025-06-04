@@ -7,7 +7,9 @@ from logging.handlers import RotatingFileHandler
 os.makedirs("logs", exist_ok=True)
 
 # General logger configuration
-logger = logging.getLogger("my_project")
+
+logger = logging.getLogger(__name__)
+
 logger.setLevel(logging.DEBUG)  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 # Log message format
