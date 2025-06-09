@@ -5,10 +5,6 @@ from dotenv import load_dotenv
 from logger_config import logger
 import os
 
-# If .env is in the parent directory
-# dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
-# print(dotenv_path)
-# load_dotenv(dotenv_path)
 load_dotenv()
 
 
@@ -45,7 +41,7 @@ class MongoDbConnection:
             self._client.close()
             self._client = None
             self._database = None
-
+            logger.info("🔒 MongoDB connection closed")
 
 # Global Instance
 db_connection = MongoDbConnection()
