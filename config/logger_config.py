@@ -4,7 +4,8 @@ from logging.handlers import RotatingFileHandler
 
 
 # Ruta absoluta al directorio raíz del proyecto
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+print (f"Project root: {PROJECT_ROOT}")
 
 # Ruta absoluta a la carpeta de logs en la raíz del proyecto
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
