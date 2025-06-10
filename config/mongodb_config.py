@@ -35,7 +35,8 @@ class MongoDbConnection:
                 logger.error(f"❌ Error connectinig MongoDB: {e}")
                 raise
         return self._database
-    
+    def get_collection(self, collection_name):
+        return self.db[collection_name]
     def close(self):
         if self._client:
             self._client.close()
