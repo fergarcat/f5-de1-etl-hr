@@ -1,0 +1,8 @@
+[project]
+name = "f5-de1-etl-hr"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "motor>=3.7.1",
+    "pymongo>=4.13.0",
+]
