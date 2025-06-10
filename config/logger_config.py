@@ -26,3 +26,5 @@ console_handler.setFormatter(formatter)
 # Add handlers to the logger
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
+
+logger.propagate = False

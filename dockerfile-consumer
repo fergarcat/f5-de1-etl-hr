@@ -1,0 +1,20 @@
+# Dockerfile para el consumer
+FROM python:3.10-slim
+
+# Establecer directorio de trabajo en el contenedor
+WORKDIR /app
+
+# Copiar requirements y luego instalarlos (capa caché)
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Instalar netcat para usar en wait-for-kafka.sh
+RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+# Dar permisos de ejecución al script
+RUN chmod +x wait-for-kafka.sh
+
+CMD ["./wait-for-kafka.sh", "kafka", "29092", "python", "-m", "kafka_consumer.consumer"]
