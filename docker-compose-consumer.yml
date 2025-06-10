@@ -69,7 +69,7 @@ services:
       - POSTGRES_PASSWORD=etl_pass
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-    command: python -m kafka_consumer.consumer
+    command: ["./wait-for-kafka.sh", "kafka", "29092", "python", "-m", "kafka_consumer.consumer"]
     volumes:
       - .:/app
     working_dir: /app
