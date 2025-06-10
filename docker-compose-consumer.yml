@@ -47,7 +47,9 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   etl_consumer:
-    build: .
+    build: 
+      context: .
+      dockerfile: dockerfile-consumer.yml
     depends_on:
       - kafka
       - mongo
