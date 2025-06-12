@@ -2,8 +2,8 @@ import os
 from pymongo import MongoClient
 from pymongo.database import Database
 from dotenv import load_dotenv
-from logger_config import logger
-import os
+from config.logger_config import logger
+
 
 load_dotenv()
 

@@ -1,18 +1,18 @@
-## mongo.py
 import os
-import json
-from pymongo import MongoClient
+from config.mongodb_config import db_connection
+from config.logger_config import logger
 from dotenv import load_dotenv
 
 load_dotenv()
 
-mongo_url = f"mongodb://{os.getenv('MONGO_HOST')}:{os.getenv('MONGO_PORT')}/"
-db_name = os.getenv("MONGO_DB")
-collection_name = os.getenv("MONGO_COLLECTION")
-
-client = MongoClient(mongo_url)
-db = client[db_name]
-collection = db[collection_name]
-
 def insert_raw_data(data):
-    collection.insert_one(data)
+    try:
+        db = db_connection.connect()
+        collection_name = os.getenv("MONGO_COLLECTION")
+        if not collection_name:
+            raise ValueError("❌ MONGO_COLLECTION no está definida en .env")
+        collection = db[collection_name]
+        collection.insert_one(data)
+        logger.info("📥 Documento insertado en MongoDB")
+    except Exception as e:
+        logger.error(f"❌ Error insertando en MongoDB: {e}")

@@ -4,52 +4,55 @@ import json
 import os
 from dotenv import load_dotenv
 from kafka import KafkaConsumer
-from kafka_consumer.etl import process_message  # Si tu transformación ocurre aquí
-from kafka_consumer.db_clients import sql, redis, mongo
+from kafka_consumer.etl import process_message
+from kafka_consumer.db_clients import sql, redis
+from kafka_consumer.db_clients.mongo import insert_raw_data
 from config.logger_config import logger
 
 load_dotenv()
 
-REQUIRED_TYPES = {"personal", "location", "professional", "bank", "net"}
+REQUIRED_TYPES = {
+    "personal": {"email", "name", "passport", "sex", "telfnumber"},
+    "location": {"address", "city", "postal_code"},
+    "professional": {"company", "job", "company_email"},
+    "bank": {"IBAN", "salary"},
+    "net": {"IPv4"}
+}
 
-def store_in_mongo(message):
-    """Handler adicional para guardar cada mensaje en MongoDB."""
-    try:
-        mongo.store_raw(message.value)
-    except Exception as e:
-        logger.warning(f"⚠️ Error al guardar en MongoDB: {e}")
-
-def run_consumer(extra_handler=None):
+def run_consumer():
     logger.info("### CONSUMIDOR KAFKA INICIADO ###")
 
-    consumer = KafkaConsumer(
-        os.getenv("KAFKA_TOPIC"),
-        bootstrap_servers=os.getenv("KAFKA_BROKER"),
-        auto_offset_reset='earliest',
-        enable_auto_commit=True,
-        group_id=os.getenv("KAFKA_GROUP_ID"),
-        value_deserializer=lambda m: json.loads(m.decode('utf-8'))
-    )
+    try:
+        consumer = KafkaConsumer(
+            os.getenv("KAFKA_TOPIC"),
+            bootstrap_servers=os.getenv("KAFKA_BROKER"),
+            auto_offset_reset='earliest',
+            enable_auto_commit=True,
+            group_id=os.getenv("KAFKA_GROUP_ID"),
+            value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+        )
+    except Exception as e:
+        logger.error(f"❌ Error al crear el consumidor Kafka: {e}")
+        return
 
     for message in consumer:
         raw_data = message.value
         logger.info(f"📥 Mensaje recibido: {raw_data}")
 
+        try:
+            insert_raw_data(raw_data)
+        except Exception as e:
+            logger.warning(f"⚠️ Error insertando en MongoDB: {e}")
+
+        
         user_id = raw_data.get("user_id") or raw_data.get("id")
         data_type = raw_data.get("type")
 
-        # Guardar mensaje individual en MongoDB (u otro destino)
-        if extra_handler:
-            try:
-                extra_handler(message)
-            except Exception as e:
-                logger.warning(f"⚠️ Error en handler extra: {e}")
-
-        # Validación básica
         if not user_id or not data_type or data_type not in REQUIRED_TYPES:
             logger.warning(f"⚠️ Mensaje inválido: user_id={user_id}, type={data_type}")
             continue
 
+        # Cachear
         logger.info(f"💾 Cacheando tipo '{data_type}' para user_id '{user_id}'")
         redis.cache_partial(user_id, data_type, raw_data)
 
@@ -76,4 +79,4 @@ def run_consumer(extra_handler=None):
             redis.clear_cache(user_id)
 
 if __name__ == "__main__":
-    run_consumer(extra_handler=store_in_mongo)
+    run_consumer()

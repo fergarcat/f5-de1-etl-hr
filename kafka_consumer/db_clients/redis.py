@@ -22,7 +22,11 @@ def cache_partial(user_id, data_type, data):
 def retrieve_complete(user_id):
     key = f"user:{user_id}"
     val = r.get(key)
-    return json.loads(val) if val else {}
-
+    try:
+        return json.loads(val) if val else {}
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Error decodificando JSON de Redis para {user_id}: {e}")
+        return {}
+    
 def clear_cache(user_id):
     r.delete(f"user:{user_id}")
