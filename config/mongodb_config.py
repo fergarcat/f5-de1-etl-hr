@@ -49,8 +49,8 @@ class MongoDbConnection:
         else:
             logger.info(f"ℹ️ Collection '{collection_name}' already exists")
         return self._database[collection_name]
-    def save_message_to_mongo(mongodb_conn, message_data):
-        collection = mongodb_conn.get_collection("kafka_messages")
+    def save_message_to_mongo(self, message_data):
+        collection = self.get_collection(os.getenv('MONGODB_COLLECTION'))
         collection.insert_one(message_data)
     def close(self):
         if self._client:
