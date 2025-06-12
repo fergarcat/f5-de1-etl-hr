@@ -2,7 +2,7 @@ import os
 from pymongo import MongoClient
 from pymongo.database import Database
 from dotenv import load_dotenv
-from logger_config import logger
+from config.logger_config import logger
 import os
 
 load_dotenv()
@@ -36,7 +36,10 @@ class MongoDbConnection:
                 raise
         return self._database
     def get_collection(self, collection_name):
-        return self.db[collection_name]
+        if self._database is None:
+            self.connect()
+        return self._database[collection_name]
+
     def create_collection(self,collection_name):
         if self._database is None:
             self.connect()
