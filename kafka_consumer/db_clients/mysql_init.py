@@ -1,9 +1,8 @@
-from sqlalchemy import (
-    create_engine,
+from sqlalchemy import ( 
+    create_engine, text,
     Column,
     Integer,
     String,
-    Text,
     DECIMAL,
     ForeignKey,
     DateTime,
@@ -14,7 +13,7 @@ from sqlalchemy.orm import declarative_base, relationship
 from dotenv import load_dotenv
 import os
 
-# 1. Cargar variables de entorno
+# 1. Load environment variables
 load_dotenv()
 mysql_user = os.getenv('MYSQL_USER')
 mysql_password = os.getenv('MYSQL_PASSWORD')
@@ -22,11 +21,21 @@ mysql_host = os.getenv('MYSQL_HOST')
 mysql_database = os.getenv('MYSQL_DATABASE')
 
 
-# 2. Crear motor de conexión
-mysql_uri = f"mysql+mysqlconnector://{mysql_user}:{mysql_password}@{mysql_host}/{mysql_database}"
-engine = create_engine(mysql_uri, echo = True)
+# 2. Create connection without specifying the database
+mysql_uri_no_db = f"mysql+mysqlconnector://{mysql_user}:{mysql_password}@{mysql_host}/"
+engine_no_db = create_engine(mysql_uri_no_db, echo=True)
 
-# 3. Declarar base y modelo
+# 3. Create the database if it does not exist
+with engine_no_db.connect() as conn:
+    conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {mysql_database}"))
+    conn.commit()
+
+
+# 4. Create the connection engine with the database
+mysql_uri = f"mysql+mysqlconnector://{mysql_user}:{mysql_password}@{mysql_host}/{mysql_database}"
+engine = create_engine(mysql_uri, echo=True)
+
+# 5. Declare base and models
 Base = declarative_base()
 
 
@@ -40,7 +49,7 @@ class Profile(Base):
     updated_at = Column(DateTime, onupdate=func.now())
 
     personal = relationship("Personal", back_populates="profile", uselist=False)
-    address = relationship("Location", back_populates="profile", uselist=False)
+    address = relationship("Address", back_populates="profile", uselist=False)
     professional = relationship("Professional", back_populates="profile", uselist=False)
     bank = relationship("Bank", back_populates="profile", uselist=False)
     net = relationship("Net", back_populates="profile", uselist=False)
@@ -114,7 +123,7 @@ class Net(Base):
     profile = relationship("Profile", back_populates="net")  
 
 
-# 4. Crear tablas si no existen
+# 6. Create tables if they do not exist
 try:
     Base.metadata.drop_all(engine) 
     Base.metadata.create_all(engine)
