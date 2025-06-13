@@ -37,8 +37,8 @@ class MongoDbConnection:
         return self._database
     def get_collection(self, collection_name):
         return self.db[collection_name]
-    def save_message_to_mongo(mongodb_conn, message_data):
-        collection = mongodb_conn.get_collection("kafka_messages")
+    def save_message_to_mongo(self, message_data):
+        collection = self.get_collection(os.getenv('MONGODB_DBE'))
         collection.insert_one(message_data)
     def close(self):
         if self._client:

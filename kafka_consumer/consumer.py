@@ -8,6 +8,7 @@ from kafka_consumer.etl import process_message
 from kafka_consumer.db_clients import sql, redis
 from kafka_consumer.db_clients.mongo import insert_raw_data
 from config.logger_config import logger
+from config import mongodb_config as mdb
 
 load_dotenv()
 
@@ -24,7 +25,7 @@ def run_consumer():
 
     try:
         consumer = KafkaConsumer(
-            os.getenv("KAFKA_TOPIC"),
+            os.getenv("KAFKA_TOPIC", "probando"),
             bootstrap_servers=os.getenv("KAFKA_BROKER"),
             auto_offset_reset='earliest',
             enable_auto_commit=True,
@@ -34,10 +35,13 @@ def run_consumer():
     except Exception as e:
         logger.error(f"❌ Error al crear el consumidor Kafka: {e}")
         return
-
+    mongodb = mdb.MongoDbConnection()
+    mongodb.connect()
     for message in consumer:
         raw_data = message.value
+        mongodb.save_message_to_mongo(mongodb,raw_data)
         logger.info(f"📥 Mensaje recibido: {raw_data}")
+
 
         try:
             insert_raw_data(raw_data)
