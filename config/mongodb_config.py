@@ -2,7 +2,7 @@ import os
 from pymongo import MongoClient
 from pymongo.database import Database
 from dotenv import load_dotenv
-from logger_config import logger
+from config.logger_config import logger
 import os
 
 load_dotenv()
@@ -36,9 +36,21 @@ class MongoDbConnection:
                 raise
         return self._database
     def get_collection(self, collection_name):
-        return self.db[collection_name]
-    def save_message_to_mongo(mongodb_conn, message_data):
-        collection = mongodb_conn.get_collection("kafka_messages")
+        if self._database is None:
+            self.connect()
+        return self._database[collection_name]
+
+    def create_collection(self,collection_name):
+        if self._database is None:
+            self.connect()
+        if collection_name not in self._database.list_collection_names():
+            self._database.create_collection(collection_name)
+            logger.info(f"✅ Collection '{collection_name}' created successfully")
+        else:
+            logger.info(f"ℹ️ Collection '{collection_name}' already exists")
+        return self._database[collection_name]
+    def save_message_to_mongo(self, message_data):
+        collection = self.get_collection(os.getenv('MONGODB_COLLECTION'))
         collection.insert_one(message_data)
     def close(self):
         if self._client:
