@@ -14,6 +14,7 @@ mysql_database = os.getenv('MYSQL_DATABASE')
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Initialize MySQL database and tables.")
 parser.add_argument('--debug', action='store_true', help="Enable debug mode (echo=True in SQLAlchemy engine).")
+parser.add_argument('--drop', action='store_true', help="Drop existing tables before creating new ones.")
 args = parser.parse_args()
 
 # Create engine without specifying database (for DB creation)
@@ -40,7 +41,10 @@ Base = declarative_base()
 
 def main():
     try:
-        Base.metadata.drop_all(engine)
+        if args.drop:
+            print("Dropping existing tables...")
+            Base.metadata.drop_all(engine)
+            print("✅ Existing tables dropped successfully.")
         Base.metadata.create_all(engine)
         print("✅ Tables created successfully.")
     except Exception as e:
