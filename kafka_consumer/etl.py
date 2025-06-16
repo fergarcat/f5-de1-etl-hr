@@ -1,15 +1,25 @@
-## etl.py
-# kafka_consumer/etl.py
+import json
+import os
+from pymongo import MongoClient
 
-def process_message(message: dict) -> dict:
+# MongoDB setup
+mongo_client = MongoClient(host=os.getenv("MONGO_HOST"), port=int(os.getenv("MONGO_PORT")))
+mongo_db = mongo_client[os.getenv("MONGO_DB")]
+mongo_collection = mongo_db[os.getenv("MONGO_COLLECTION")]
+
+def process_message(message):
     """
-    Placeholder ETL step. Modify this function to apply transformation logic.
-    
-    Args:
-        message (dict): Raw input message from Kafka.
-    
-    Returns:
-        dict: Transformed message (currently unchanged).
+    Procesa un mensaje desde Kafka:
+    - Lo guarda en MongoDB.
     """
-    # Aquí puedes aplicar limpieza, enriquecimiento, validación, etc.
-    return message
+    print(f"Procesando mensaje: {message}")
+
+    try:
+        data = json.loads(message)
+    except json.JSONDecodeError:
+        print("Mensaje no es JSON válido")
+        return
+
+    # Guardar en MongoDB
+    mongo_collection.insert_one(data)
+    print("Documento insertado en MongoDB")

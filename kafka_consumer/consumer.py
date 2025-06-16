@@ -25,7 +25,7 @@ def run_consumer():
 
     try:
         consumer = KafkaConsumer(
-            os.getenv("KAFKA_TOPIC", "probando"),
+            os.getenv("KAFKA_TOPIC"),
             bootstrap_servers=os.getenv("KAFKA_BROKER"),
             auto_offset_reset='earliest',
             enable_auto_commit=True,
@@ -39,7 +39,7 @@ def run_consumer():
     mongodb.connect()
     for message in consumer:
         raw_data = message.value
-        mongodb.save_message_to_mongo(mongodb,raw_data)
+        mongodb.save_message_to_mongo(raw_data)
         logger.info(f"📥 Mensaje recibido: {raw_data}")
 
 
