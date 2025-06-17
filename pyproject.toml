@@ -3,6 +3,7 @@ name = "f5-de1-etl-hr"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "dotenv>=0.9.9",
     "motor>=3.7.1",
     "nipyapi>=0.22.0",
     "pymongo>=4.13.0",
