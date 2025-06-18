@@ -1,81 +1,84 @@
+version: '3.8'
+
 services:
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    depends_on:
-      - zookeeper
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://kafka:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "9092:9092"
-      - "39092:29092"
-
   mongo:
-    image: mongo:latest
+    image: mongo:7.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    networks:
+      - kafka-net
 
   redis:
     image: redis:latest
     ports:
       - "6379:6379"
+    networks:
+      - kafka-net
 
   postgres:
     image: postgres:13
     environment:
-      POSTGRES_DB: etl_db
-      POSTGRES_USER: etl_user
-      POSTGRES_PASSWORD: etl_pass
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - kafka-net
 
   etl_consumer:
     build: 
       context: .
       dockerfile: Dockerfile
+    container_name: etl_consumer
+    environment:
+      IN_DOCKER: "1"
+      KAFKA_BROKER: kafka:9092  # Usa el Kafka del producer
+      KAFKA_TOPIC: ${KAFKA_TOPIC}
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID}
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      MONGODB_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME}
+      MONGO_COLLECTION: ${MONGO_COLLECTION}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: ${REDIS_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT}
+    networks:
+      kafka-net:
+        external:
+          name: data-engineering-educational-project_kafka-net
+        default:
+          driver: bridge
+
+    services:
+      etl_consumer:
+        networks:
+        - default      
+        - kafka-net
+
+    restart: unless-stopped
     depends_on:
-      - kafka
       - mongo
       - redis
       - postgres
-    environment:
-      IN_DOCKER: "1"
-      KAFKA_BROKER: kafka:29092
-      KAFKA_TOPIC: probando
-      KAFKA_GROUP_ID: etl-consumer-group-test1
-      MONGO_HOST: mongo
-      MONGO_PORT: "27017"
-      MONGO_DB: etl_db
-      MONGO_COLLECTION: raw_data
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      POSTGRES_DB: etl_db
-      POSTGRES_USER: etl_user
-      POSTGRES_PASSWORD: etl_pass
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-    command: ["tail", "-f", "/dev/null"]
-    #["./wait-for-kafka.sh", "kafka", "29092", "python", "-m", "kafka_consumer.consumer"]
-    volumes:
-      - .:/app
-    working_dir: /app
+
+networks:
+  kafka-net:
+    external: true  # Usar la red externa del producer
 
 volumes:
   mongo_data:

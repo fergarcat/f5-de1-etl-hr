@@ -1,18 +1,19 @@
+# Usa la imagen oficial de python 3.10 slim
 FROM python:3.10-slim
-ENV PYTHONPATH="/app"
 
-# Instalar netcat para el script wait-for-kafka.sh
-RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
-# Copiar requisitos y luego instalar dependencias
-COPY requirements.txt /app/requirements.txt
+# Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código
+# Copia el archivo de dependencias
+COPY requirements.txt /app/requirements.txt
+
+# Instala las dependencias de Python
+RUN apt-get update && apt-get install -y gcc libpq-dev && \
+    pip install --no-cache-dir -r /app/requirements.txt && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copia todo el código fuente (incluyendo config y kafka_consumer)
 COPY . /app
 
-# Dar permisos de ejecución al script
-RUN chmod +x wait-for-kafka.sh
-
-# Comando que espera a Kafka y luego lanza el consumer
-CMD ["./wait-for-kafka.sh", "kafka", "29092", "python", "kafka_consumer/consumer.py"]
+# Comando por defecto al iniciar el contenedor
+CMD ["python", "-m", "kafka_consumer.consumer"]

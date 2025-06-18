@@ -1,7 +1,7 @@
-# consumer.py
-
 import json
 import os
+import socket
+import time
 from dotenv import load_dotenv
 from kafka import KafkaConsumer
 from kafka_consumer.etl import process_message
@@ -20,35 +20,68 @@ REQUIRED_TYPES = {
     "net": {"IPv4"}
 }
 
+def safe_json_deserializer(m):
+    if not m:
+        logger.warning("⚠️ Mensaje vacío recibido.")
+        return None
+    try:
+        return json.loads(m.decode('utf-8'))
+    except Exception as e:
+        logger.warning(f"⚠️ Error al deserializar mensaje: {m} - {e}")
+        return None
+
+def wait_for_kafka(host: str, port: int, timeout: int = 60):
+    logger.info(f"⏳ Esperando a Kafka en {host}:{port}...")
+    start_time = time.time()
+    while True:
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                logger.info("✅ Kafka está disponible.")
+                return
+        except OSError:
+            if time.time() - start_time > timeout:
+                logger.error(f"❌ Kafka no respondió tras {timeout} segundos.")
+                raise TimeoutError("Kafka no disponible.")
+            time.sleep(2)
+
 def run_consumer():
     logger.info("### CONSUMIDOR KAFKA INICIADO ###")
+
+    kafka_broker = os.getenv("KAFKA_BROKER", "kafka:9092")
+    kafka_host, kafka_port_str = kafka_broker.split(":")
+    kafka_port = int(kafka_port_str)
+    wait_for_kafka(kafka_host, kafka_port)
 
     try:
         consumer = KafkaConsumer(
             os.getenv("KAFKA_TOPIC"),
-            bootstrap_servers=os.getenv("KAFKA_BROKER"),
+            bootstrap_servers=kafka_broker,
             auto_offset_reset='earliest',
             enable_auto_commit=True,
-            group_id=os.getenv("KAFKA_GROUP_ID"),
-            value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+            group_id=os.getenv("KAFKA_GROUP_ID", "etl-group"),
+            value_deserializer=safe_json_deserializer
         )
     except Exception as e:
         logger.error(f"❌ Error al crear el consumidor Kafka: {e}")
         return
+
     mongodb = mdb.MongoDbConnection()
     mongodb.connect()
+
+    logger.info("🕒 Esperando mensajes...")
+
     for message in consumer:
         raw_data = message.value
-        mongodb.save_message_to_mongo(raw_data)
-        logger.info(f"📥 Mensaje recibido: {raw_data}")
+        if raw_data is None:
+            continue  # ignorar mensajes vacíos o mal deserializados
 
+        logger.info(f"📥 Mensaje recibido: {raw_data}")
 
         try:
             insert_raw_data(raw_data)
         except Exception as e:
             logger.warning(f"⚠️ Error insertando en MongoDB: {e}")
 
-        
         user_id = raw_data.get("user_id") or raw_data.get("id")
         data_type = raw_data.get("type")
 
@@ -56,14 +89,14 @@ def run_consumer():
             logger.warning(f"⚠️ Mensaje inválido: user_id={user_id}, type={data_type}")
             continue
 
-        # Cachear
         logger.info(f"💾 Cacheando tipo '{data_type}' para user_id '{user_id}'")
         redis.cache_partial(user_id, data_type, raw_data)
 
         cached = redis.retrieve_complete(user_id)
         logger.info(f"📦 Datos cacheados para '{user_id}': {list(cached.keys())}")
 
-        if REQUIRED_TYPES.issubset(cached.keys()):
+        # Corregir la condición para verificar si el usuario tiene todos los tipos
+        if REQUIRED_TYPES.keys() <= cached.keys():
             logger.info(f"✅ Usuario '{user_id}' completo. Procesando ETL...")
 
             transformed = {
