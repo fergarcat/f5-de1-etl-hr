@@ -1,50 +1,41 @@
+version: '3.8'
+
 services:
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.3.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    networks:
+      - kafka-net
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.3.0
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://kafka:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:39092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:39092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
-      - "9092:9092"
-      - "39092:29092"
-
-  mongo:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
+      - "9092:9092"       # Para acceso desde contenedores
+      - "39092:39092"     # Para acceso desde tu máquina local (por si lo necesitas)
+    networks:
+      - kafka-net
 
   redis:
     image: redis:latest
     ports:
       - "6379:6379"
-
-  postgres:
-    image: postgres:13
-    environment:
-      POSTGRES_DB: etl_db
-      POSTGRES_USER: etl_user
-      POSTGRES_PASSWORD: etl_pass
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+    networks:
+      - kafka-net
 
   etl_consumer:
     build: 
@@ -52,31 +43,28 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - kafka
-      - mongo
       - redis
-      - postgres
     environment:
       IN_DOCKER: "1"
-      KAFKA_BROKER: kafka:29092
+      KAFKA_BROKER: kafka:9092
       KAFKA_TOPIC: probando
       KAFKA_GROUP_ID: etl-consumer-group-test1
-      MONGO_HOST: mongo
-      MONGO_PORT: "27017"
-      MONGO_DB: etl_db
-      MONGO_COLLECTION: raw_data
       REDIS_HOST: redis
       REDIS_PORT: "6379"
-      POSTGRES_DB: etl_db
-      POSTGRES_USER: etl_user
-      POSTGRES_PASSWORD: etl_pass
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-    command: ["tail", "-f", "/dev/null"]
-    #["./wait-for-kafka.sh", "kafka", "29092", "python", "-m", "kafka_consumer.consumer"]
+      MONGODB_URL: mongodb://mongo:27017/
+      MONGO_DB_NAME: mongo_consumer
+      MONGO_HOST: localhost
+      MONGO_PORT: 27017
+      MONGO_COLLECTION: raw_data
+      MONGO_INITDB_ROOT_USERNAME: mongo_f5_de1
+      MONGO_INITDB_ROOT_PASSWORD: 3tL_f542
+    command: ["tail", "-f", "/dev/null"]  # Cambia por tu script real si lo necesitas
     volumes:
       - .:/app
     working_dir: /app
+    networks:
+      - kafka-net
 
-volumes:
-  mongo_data:
-  pgdata:
+networks:
+  kafka-net:
+    driver: bridge
