@@ -10,6 +10,11 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
     volumes:
       - mongo_data:/data/db
-
+    networks:
+      - kafka-net
 volumes:
   mongo_data:
+
+networks:
+  kafka-net:
+    driver: bridge
