@@ -3,6 +3,9 @@ name = "f5-de1-etl-hr"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "dotenv>=0.9.9",
     "motor>=3.7.1",
+    "mysql-connector-python>=9.3.0",
     "pymongo>=4.13.0",
+    "sqlalchemy>=2.0.41",
 ]
