@@ -1,5 +1,7 @@
+#!/bin/sh
+
 echo "Ejecutando scripts de inicialización..."
-python kafka_consumer/db_clients/mongo_init.py
-python kafka_consumer/db_clients/mysql_init.py
+python -m kafka_consumer.db_clients.mongo_init
+python -m kafka_consumer.db_clients.mysql_init
 echo "Lanzando consumidor principal..."
-python kafka_consumer/consumer.py
+python -m kafka_consumer.consumer
