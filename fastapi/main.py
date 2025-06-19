@@ -33,7 +33,6 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Incluir routers
-app.include_router(api_router, prefix="/api", tags=["API"])
 app.include_router(frontend_router, tags=["Frontend"])
 
 # Health check principal
