@@ -10,7 +10,7 @@ from kafka_consumer.db_clients.mongo import insert_raw_data
 from config.logger_config import logger
 from config import mongodb_config as mdb
 
-load_dotenv()
+#load_dotenv()
 
 REQUIRED_TYPES = {
     "personal": {"email", "name", "passport", "sex", "telfnumber"},
@@ -20,6 +20,7 @@ REQUIRED_TYPES = {
     "net": {"IPv4"}
 }
 
+<<<<<<< Updated upstream
 def safe_json_deserializer(m):
     if not m:
         logger.warning("⚠️ Mensaje vacío recibido.")
@@ -44,6 +45,14 @@ def wait_for_kafka(host: str, port: int, timeout: int = 60):
                 raise TimeoutError("Kafka no disponible.")
             time.sleep(2)
 
+=======
+def safe_json_loads(m):
+    try:
+        return json.loads(m.decode('utf-8'))
+    except (json.JSONDecodeError, AttributeError):
+        return None
+
+>>>>>>> Stashed changes
 def run_consumer():
     logger.info("### CONSUMIDOR KAFKA INICIADO ###")
 
@@ -54,12 +63,23 @@ def run_consumer():
 
     try:
         consumer = KafkaConsumer(
+<<<<<<< Updated upstream
             os.getenv("KAFKA_TOPIC"),
             bootstrap_servers=kafka_broker,
             auto_offset_reset='earliest',
             enable_auto_commit=True,
             group_id=os.getenv("KAFKA_GROUP_ID", "etl-group"),
             value_deserializer=safe_json_deserializer
+=======
+            #os.getenv("KAFKA_TOPIC"),
+            'probando',
+            #bootstrap_servers=os.getenv("KAFKA_BROKER"),
+            bootstrap_servers = ['kafka:9092'],
+            auto_offset_reset='earliest',
+            enable_auto_commit=True,
+            group_id="etl-consumer-group",
+            value_deserializer=lambda m: safe_json_loads(m)
+>>>>>>> Stashed changes
         )
     except Exception as e:
         logger.error(f"❌ Error al crear el consumidor Kafka: {e}")
@@ -71,6 +91,9 @@ def run_consumer():
     logger.info("🕒 Esperando mensajes...")
 
     for message in consumer:
+        if message.value is None:
+            logger.warning("⚠️ Mensaje vacío recibido, ignorando...")
+            continue
         raw_data = message.value
         if raw_data is None:
             continue  # ignorar mensajes vacíos o mal deserializados

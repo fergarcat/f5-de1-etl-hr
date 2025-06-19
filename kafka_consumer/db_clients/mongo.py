@@ -8,9 +8,9 @@ load_dotenv()
 def insert_raw_data(data):
     try:
         db = db_connection.connect()
-        collection_name = os.getenv("MONGO_COLLECTION")
+        collection_name = os.getenv("MONGODB_COLLECTION")
         if not collection_name:
-            raise ValueError("❌ MONGO_COLLECTION no está definida en .env")
+            raise ValueError("❌ MONGODB_COLLECTION no está definida en .env")
         collection = db[collection_name]
         collection.insert_one(data)
         logger.info("📥 Documento insertado en MongoDB")

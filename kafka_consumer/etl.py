@@ -3,6 +3,7 @@ import os
 from pymongo import MongoClient
 
 # MongoDB setup
+<<<<<<< Updated upstream
 mongo_host = os.getenv("MONGO_HOST")
 mongo_port = os.getenv("MONGO_PORT")
 
@@ -18,6 +19,11 @@ if not db_name:
     raise ValueError("❌ Environment variable MONGODB_DB_NAME is not set.")
 mongo_db = mongo_client[db_name]
 mongo_collection = mongo_db[os.getenv("MONGO_COLLECTION")]
+=======
+mongo_client = MongoClient(host=os.getenv("MONGO_HOST"), port=int(os.getenv("MONGO_PORT")))
+mongo_db = mongo_client[os.getenv("MONGO_DB_NAME")]
+mongo_collection = mongo_db[os.getenv("MONGODB_COLLECTION")]
+>>>>>>> Stashed changes
 
 def process_message(message):
     """

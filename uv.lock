@@ -26,7 +26,11 @@ name = "f5-de1-etl-hr"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+<<<<<<< Updated upstream
     { name = "dotenv" },
+=======
+    { name = "grep" },
+>>>>>>> Stashed changes
     { name = "motor" },
     { name = "mysql-connector-python" },
     { name = "pymongo" },
@@ -35,7 +39,11 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+<<<<<<< Updated upstream
     { name = "dotenv", specifier = ">=0.9.9" },
+=======
+    { name = "grep", specifier = ">=0.3.2" },
+>>>>>>> Stashed changes
     { name = "motor", specifier = ">=3.7.1" },
     { name = "mysql-connector-python", specifier = ">=9.3.0" },
     { name = "pymongo", specifier = ">=4.13.0" },
@@ -65,6 +73,12 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/c6/ad82f148a4e3ce9564056453a71529732baf5448ad53fc323e37efe34f66/greenlet-3.2.3-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:86c2d68e87107c1792e2e8d5399acec2487a4e993ab76c792408e59394d52141", size = 655320 },
     { url = "https://files.pythonhosted.org/packages/5c/4f/aab73ecaa6b3086a4c89863d94cf26fa84cbff63f52ce9bc4342b3087a06/greenlet-3.2.3-cp314-cp314-win_amd64.whl", hash = "sha256:8c47aae8fbbfcf82cc13327ae802ba13c9c36753b67e760023fd116bc124a62a", size = 301236 },
 ]
+
+[[package]]
+name = "grep"
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/13/7091f6866ab1a01745793f53d3b2beeddb2a9f667bdcf7ff2b75f27266ff/grep-0.3.2.tar.gz", hash = "sha256:c3fa0fefbf1629c5d02d84283da983a11bdfbe3d1a9a19f118d88e7e225fb1c3", size = 3223 }
 
 [[package]]
 name = "motor"
