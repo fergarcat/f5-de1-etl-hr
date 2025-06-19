@@ -12,7 +12,9 @@ def insert_raw_data(data):
         if not collection_name:
             raise ValueError("❌ MONGO_COLLECTION no está definida en .env")
         collection = db[collection_name]
-        collection.insert_one(data)
-        logger.info("📥 Documento insertado en MongoDB")
+        result = collection.insert_one(data)
+        logger.info(f"📥 Documento insertado en MongoDB con ID: {result.inserted_id}")
+        return result.inserted_id
     except Exception as e:
         logger.error(f"❌ Error insertando en MongoDB: {e}")
+        raise e
