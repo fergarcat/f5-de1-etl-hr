@@ -1,98 +1,206 @@
+# ========================================
+# API.PY - ENDPOINTS PARA OBTENER DATOS
+# ========================================
+"""
+Este archivo define todos los endpoints que devuelven datos JSON
+para que el JavaScript del dashboard pueda crear gráficos
+
+FLUJO:
+1. JavaScript hace petición: fetch('/api/stats')
+2. Este archivo lee MongoDB  
+3. Devuelve JSON con estadísticas
+4. JavaScript usa esos datos para crear gráficos
+"""
+
+# ========================================
+# IMPORTS - LIBRERÍAS NECESARIAS
+# ========================================
 from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any, Optional
 import os
-import sys
-import json
+import random
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Agregar path para imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-# Importar configuraciones
+# Importar clientes de bases de datos
 try:
-    import psycopg2
+    import mysql.connector
+    MYSQL_AVAILABLE = True
+except ImportError:
+    print("⚠️ MySQL connector no disponible")
+    MYSQL_AVAILABLE = False
+
+try:
     import redis
-    from config.logger_config import logger
-except ImportError as e:
-    print(f"Import error: {e}")
-    logger = None
+    REDIS_AVAILABLE = True
+except ImportError:
+    print("⚠️ Redis no disponible")
+    REDIS_AVAILABLE = False
 
+# ========================================
+# CONFIGURACIÓN INICIAL
+# ========================================
 load_dotenv()
+api_router = APIRouter()  # Crear router para agrupar endpoints
 
-api_router = APIRouter()
+# ========================================
+# IMPORTAR CONFIGURACIONES MONGODB
+# ========================================
+# Intentar importar conexión a MongoDB, si no existe usar datos mock
+try:
+    from config.mongodb_config import db_connection
+    from config.logger_config import logger
+    MONGODB_AVAILABLE = True
+    print("✅ MongoDB configurado correctamente")
+except ImportError as e:
+    print(f"⚠️ MongoDB no disponible: {e}")
+    print("📝 Usando datos MOCK para desarrollo")
+    db_connection = None
+    logger = None
+    MONGODB_AVAILABLE = False
 
-# Configuración de bases de datos
-POSTGRES_CONFIG = {
-    'host': os.getenv('POSTGRES_HOST', 'localhost'),
-    'port': int(os.getenv('POSTGRES_PORT', 5432)),
-    'database': os.getenv('POSTGRES_DB', 'etl_db'),
-    'user': os.getenv('POSTGRES_USER', 'etl_user'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'etl_pass')
+# ========================================
+# CONFIGURACIÓN DE BASES DE DATOS
+# ========================================
+
+# Configuración MongoDB (datos raw desde Kafka)
+MONGO_CONFIG = {
+    'database': os.getenv('MONGODB_DB_NAME', 'etl_db'),
+    'collection': os.getenv('MONGO_COLLECTION', 'raw_data')
 }
 
+# Configuración MySQL (datos estructurados/relacionales)
+MYSQL_CONFIG = {
+    'host': os.getenv('MYSQL_HOST', 'mysql'),
+    'port': int(os.getenv('MYSQL_PORT', 3306)),
+    'database': os.getenv('MYSQL_DATABASE', 'hr'),
+    'user': os.getenv('MYSQL_USER', 'mysql_f5_de1'),
+    'password': os.getenv('MYSQL_PASSWORD', '3tL_f542')
+}
+
+# Configuración Redis (cache temporal)
 REDIS_CONFIG = {
-    'host': os.getenv('REDIS_HOST', 'localhost'),
+    'host': os.getenv('REDIS_HOST', 'redis'),
     'port': int(os.getenv('REDIS_PORT', 6379)),
     'db': 0
 }
 
-def get_postgres_connection():
-    """Obtener conexión a PostgreSQL con manejo de errores"""
+def get_mongodb():
+    """
+    FUNCIÓN PARA CONECTAR A MONGODB
+    - Intenta conectar a MongoDB para datos raw
+    - Si no puede, devuelve None y usará datos mock
+    """
     try:
-        conn = psycopg2.connect(**POSTGRES_CONFIG)
-        return conn
+        if db_connection and MONGODB_AVAILABLE:
+            db = db_connection.connect()
+            return db[MONGO_CONFIG['collection']]
+        return None
     except Exception as e:
         if logger:
-            logger.error(f"Error connecting to PostgreSQL: {e}")
-        raise HTTPException(status_code=500, detail="Database connection error")
+            logger.error(f"Error connecting to MongoDB: {e}")
+        print(f"❌ Error MongoDB: {e}")
+        return None
+
+def get_mysql_connection():
+    """
+    FUNCIÓN PARA CONECTAR A MYSQL
+    - Conecta a MySQL para datos estructurados
+    - Se usa para consultas más complejas y relacionales
+    """
+    try:
+        if MYSQL_AVAILABLE:
+            conn = mysql.connector.connect(**MYSQL_CONFIG)
+            return conn
+        return None
+    except Exception as e:
+        if logger:
+            logger.error(f"Error connecting to MySQL: {e}")
+        print(f"❌ Error MySQL: {e}")
+        return None
 
 def get_redis_connection():
-    """Obtener conexión a Redis con manejo de errores"""
+    """
+    FUNCIÓN PARA CONECTAR A REDIS
+    - Conecta a Redis para cache temporal
+    - Mejora el rendimiento de consultas frecuentes
+    """
     try:
-        r = redis.Redis(**REDIS_CONFIG)
-        r.ping()  # Test connection
-        return r
+        if REDIS_AVAILABLE:
+            r = redis.Redis(**REDIS_CONFIG)
+            r.ping()  # Test connection
+            return r
+        return None
     except Exception as e:
         if logger:
             logger.error(f"Error connecting to Redis: {e}")
-        raise HTTPException(status_code=500, detail="Redis connection error")
+        print(f"❌ Error Redis: {e}")
+        return None
 
-@api_router.get("/test")
-async def test_api():
-    """Endpoint de prueba básico"""
-    return {
-        "message": "API funcionando correctamente",
-        "timestamp": datetime.now().isoformat(),
-        "router": "api_router",
-        "status": "success"
-    }
+# ========================================
+# ENDPOINTS PRINCIPALES - DASHBOARD
+# ========================================
 
 @api_router.get("/health")
-async def api_health():
-    """Health check de la API y conexiones"""
+async def health():
+    """
+    HEALTH CHECK - VERIFICAR QUE LA API FUNCIONA
+    Endpoint: GET /api/health
+    
+    Verifica conexiones a:
+    - MongoDB (datos raw)
+    - MySQL (datos estructurados) 
+    - Redis (cache)
+    
+    Respuesta:
+    {
+        "status": "OK",
+        "databases": {
+            "mongodb": "connected" | "disconnected",
+            "mysql": "connected" | "disconnected", 
+            "redis": "connected" | "disconnected"
+        },
+        "timestamp": "2024-12-20T10:30:00"
+    }
+    """
     health_status = {
-        "api": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "databases": {}
+        "status": "OK",
+        "databases": {},
+        "timestamp": datetime.now().isoformat()
     }
     
-    # Test PostgreSQL
+    # Test MongoDB connection
     try:
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        cursor.fetchone()
-        conn.close()
-        health_status["databases"]["postgresql"] = "connected"
+        collection = get_mongodb()
+        if collection is not None:
+            collection.count_documents({})
+            health_status["databases"]["mongodb"] = "connected"
+        else:
+            health_status["databases"]["mongodb"] = "disconnected"
     except:
-        health_status["databases"]["postgresql"] = "error"
+        health_status["databases"]["mongodb"] = "error"
     
-    # Test Redis
+    # Test MySQL connection
+    try:
+        conn = get_mysql_connection()
+        if conn is not None:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+            conn.close()
+            health_status["databases"]["mysql"] = "connected"
+        else:
+            health_status["databases"]["mysql"] = "disconnected"
+    except:
+        health_status["databases"]["mysql"] = "error"
+    
+    # Test Redis connection
     try:
         r = get_redis_connection()
-        r.ping()
-        health_status["databases"]["redis"] = "connected"
+        if r is not None:
+            r.ping()
+            health_status["databases"]["redis"] = "connected"
+        else:
+            health_status["databases"]["redis"] = "disconnected"
     except:
         health_status["databases"]["redis"] = "error"
     
@@ -100,719 +208,403 @@ async def api_health():
 
 @api_router.get("/stats")
 async def get_dashboard_stats():
-    """Estadísticas principales para el dashboard"""
+    """
+    ESTADÍSTICAS PRINCIPALES PARA EL DASHBOARD
+    Endpoint: GET /api/stats
+    
+    FLUJO DE DATOS:
+    1. Intentar obtener datos desde MySQL (datos estructurados)
+    2. Si no está disponible, usar MongoDB (datos raw)
+    3. Si no está disponible, usar datos MOCK
+    
+    Este endpoint es usado por dashboard.js para:
+    - Mostrar total de empleados procesados
+    - Crear gráfico de distribución por ciudades
+    - Crear gráfico de distribución por departamentos
+    
+    Respuesta:
+    {
+        "total_employees": 1250,
+        "avg_salary": 65750.50,
+        "top_cities": [{"city": "Madrid", "count": 345}, ...],
+        "top_departments": [{"department": "IT", "count": 285}, ...],
+        "data_source": "mysql" | "mongodb" | "mock",
+        "status": "success"
+    }
+    """
     try:
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
+        print("📊 Obteniendo estadísticas del dashboard...")
         
-        # Total usuarios procesados
-        cursor.execute("SELECT COUNT(*) FROM users")
-        total_users = cursor.fetchone()[0] if cursor.rowcount > 0 else 0
-          # Usuarios por ciudad (top 5) - usando nombres del Kafka
-        cursor.execute("""
-            SELECT location->>'city' as city, COUNT(*) as count 
-            FROM users 
-            WHERE location->>'city' IS NOT NULL 
-            GROUP BY location->>'city' 
-            ORDER BY count DESC 
-            LIMIT 5
-        """)
-        cities_data = [{"city": row[0], "count": row[1]} for row in cursor.fetchall()]
+        # OPCIÓN 1: Intentar obtener datos desde MySQL (estructurados)
+        mysql_conn = get_mysql_connection()
+        if mysql_conn is not None:
+            print("🔗 Usando datos desde MySQL...")
+            return await get_stats_from_mysql(mysql_conn)
         
-        # Usuarios por posición/trabajo (top 5) - usando nombres del Kafka
-        cursor.execute("""
-            SELECT professional_data->>'job' as job, COUNT(*) as count 
-            FROM users 
-            WHERE professional_data->>'job' IS NOT NULL 
-            GROUP BY professional_data->>'job' 
-            ORDER BY count DESC 
-            LIMIT 5
-        """)
-        positions_data = [{"position": row[0], "count": row[1]} for row in cursor.fetchall()]
+        # OPCIÓN 2: Si MySQL no está disponible, usar MongoDB (raw)
+        collection = get_mongodb()
+        if collection is not None:
+            print("🔗 Usando datos desde MongoDB...")
+            return await get_stats_from_mongodb(collection)
         
-        # Usuarios por empresa (top 5)
-        cursor.execute("""
-            SELECT professional_data->>'company' as company, COUNT(*) as count 
-            FROM users 
-            WHERE professional_data->>'company' IS NOT NULL 
-            GROUP BY professional_data->>'company' 
-            ORDER BY count DESC 
-            LIMIT 5
-        """)
-        companies_data = [{"company": row[0], "count": row[1]} for row in cursor.fetchall()]
-        
-        # Actividad reciente (últimos 10)
-        cursor.execute("""
-            SELECT user_id, personal->>'name' as name, created_at
-            FROM users 
-            ORDER BY created_at DESC 
-            LIMIT 10
-        """)
-        recent_activity = [
-            {
-                "user_id": row[0],
-                "name": row[1] or "N/A",
-                "created_at": row[2].isoformat() if row[2] else None
-            }
-            for row in cursor.fetchall()
-        ]
-        
-        conn.close()
-        
-        # Redis stats
-        try:
-            r = get_redis_connection()
-            cache_keys = len(r.keys("user:*"))
-        except:
-            cache_keys = 0
-        
-        return {
-            "total_processed_users": total_users,
-            "users_in_cache": cache_keys,
-            "top_cities": cities_data,
-            "top_positions": positions_data,
-            "recent_activity": recent_activity,
-            "last_updated": datetime.now().isoformat(),
-            "status": "success"
-        }
+        # OPCIÓN 3: Si no hay bases de datos, usar datos MOCK
+        print("🔗 Usando datos MOCK...")
+        return await get_mock_stats()
         
     except Exception as e:
         if logger:
             logger.error(f"Error getting dashboard stats: {e}")
-        raise HTTPException(status_code=500, detail=f"Stats error: {str(e)}")
+        print(f"❌ Error en stats: {e}")
+        # Si hay error, usar datos MOCK
+        return await get_mock_stats()
 
-@api_router.get("/users")
-async def get_all_users(limit: int = 50, offset: int = 0):
-    """Obtener todos los usuarios con paginación"""
+async def get_stats_from_mysql(conn):
+    """
+    OBTENER ESTADÍSTICAS DESDE MYSQL
+    - Datos ya estructurados y procesados
+    - Consultas SQL más eficientes
+    """
     try:
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
         
-        # Total count
-        cursor.execute("SELECT COUNT(*) FROM users")
-        total_count = cursor.fetchone()[0] if cursor.rowcount > 0 else 0
+        # 1. Total empleados
+        cursor.execute("SELECT COUNT(*) as total FROM employees")
+        total_result = cursor.fetchone()
+        total_employees = total_result['total'] if total_result else 0
         
-        # Usuarios paginados
+        # 2. Salario promedio
+        cursor.execute("SELECT AVG(salary) as avg_salary FROM employees WHERE salary IS NOT NULL")
+        salary_result = cursor.fetchone()
+        avg_salary = round(salary_result['avg_salary'], 2) if salary_result and salary_result['avg_salary'] else 0
+        
+        # 3. Top 5 ciudades
         cursor.execute("""
-            SELECT user_id, 
-                   personal->>'name' as name,
-                   personal->>'email' as email,
-                   location->>'city' as city,
-                   professional->>'position' as position,
-                   created_at 
-            FROM users 
-            ORDER BY created_at DESC
-            LIMIT %s OFFSET %s
-        """, (limit, offset))
+            SELECT city, COUNT(*) as count 
+            FROM employees 
+            WHERE city IS NOT NULL 
+            GROUP BY city 
+            ORDER BY count DESC 
+            LIMIT 5
+        """)
+        cities_data = cursor.fetchall()
+        top_cities = [{"city": row['city'], "count": row['count']} for row in cities_data]
         
-        users = []
-        for row in cursor.fetchall():
-            users.append({
-                "user_id": row[0],
-                "name": row[1] or "N/A",
-                "email": row[2] or "N/A",
-                "city": row[3] or "N/A", 
-                "position": row[4] or "N/A",
-                "created_at": row[5].isoformat() if row[5] else None
-            })
+        # 4. Top 5 departamentos
+        cursor.execute("""
+            SELECT department, COUNT(*) as count 
+            FROM employees 
+            WHERE department IS NOT NULL 
+            GROUP BY department 
+            ORDER BY count DESC 
+            LIMIT 5
+        """)
+        departments_data = cursor.fetchall()
+        top_departments = [{"department": row['department'], "count": row['count']} for row in departments_data]
         
         conn.close()
         
         return {
-            "users": users,
-            "count": len(users),
-            "total": total_count,
-            "pagination": {
-                "limit": limit,
-                "offset": offset,
-                "has_more": (offset + limit) < total_count
-            },
+            "total_employees": total_employees,
+            "avg_salary": avg_salary,
+            "top_cities": top_cities,
+            "top_departments": top_departments,
+            "last_updated": datetime.now().isoformat(),
+            "data_source": "mysql",
             "status": "success"
         }
         
     except Exception as e:
-        if logger:
-            logger.error(f"Error getting users: {e}")
-        raise HTTPException(status_code=500, detail=f"Users error: {str(e)}")
-
-@api_router.get("/users/{user_id}")
-async def get_user_detail(user_id: str):
-    """Detalle completo de un usuario"""
-    try:
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
-        row = cursor.fetchone()
-        
-        if not row:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        
-        user_data = {
-            "user_id": row[1],
-            "personal": row[2],
-            "location": row[3],
-            "professional": row[4],
-            "bank": row[5],
-            "net": row[6],
-            "created_at": row[7].isoformat() if row[7] else None
-        }
-        
+        print(f"❌ Error en MySQL: {e}")
         conn.close()
-        return {"user": user_data, "status": "success"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        if logger:
-            logger.error(f"Error getting user detail: {e}")
-        raise HTTPException(status_code=500, detail=f"User detail error: {str(e)}")
+        raise e
 
-@api_router.get("/cache/all")
-async def get_cache_data():
-    """Datos en cache (Redis) para tiempo real"""
-    try:
-        r = get_redis_connection()
-        keys = r.keys("user:*")
-        
-        cache_data = []
-        for key in keys:
-            user_id = key.decode('utf-8').replace('user:', '')
-            cached = r.hgetall(key)
-            
-            decoded_data = {}
-            for field, value in cached.items():
-                try:
-                    decoded_data[field.decode('utf-8')] = json.loads(value.decode('utf-8'))
-                except:
-                    decoded_data[field.decode('utf-8')] = value.decode('utf-8')
-            
-            # Calcular completitud
-            required_types = {"personal", "location", "professional", "bank", "net"}
-            completed_types = set(decoded_data.keys())
-            completeness = len(completed_types.intersection(required_types))
-            
-            cache_data.append({
-                "user_id": user_id,
-                "data": decoded_data,
-                "completeness": f"{completeness}/5",
-                "completion_percentage": (completeness / 5) * 100,
-                "is_complete": completeness == 5,
-                "missing_types": list(required_types - completed_types)
-            })
-        
-        return {
-            "cache_data": cache_data,
-            "count": len(cache_data),
-            "timestamp": datetime.now().isoformat(),
-            "status": "success"
-        }
-        
-    except Exception as e:
-        if logger:
-            logger.error(f"Error getting cache data: {e}")
-        raise HTTPException(status_code=500, detail=f"Cache error: {str(e)}")
+async def get_stats_from_mongodb(collection):
+    """
+    OBTENER ESTADÍSTICAS DESDE MONGODB
+    - Datos raw desde Kafka
+    - Usar agregaciones de MongoDB
+    """
+    # 1. TOTAL DE EMPLEADOS PROCESADOS
+    total_employees = collection.count_documents({})
+    print(f"📈 Total empleados en MongoDB: {total_employees}")
+    
+    # 2. TOP 5 CIUDADES CON MÁS EMPLEADOS
+    # Buscar en el campo: location.city
+    cities_pipeline = [
+        {"$match": {"location.city": {"$exists": True, "$ne": None}}},  # Solo docs con ciudad
+        {"$group": {"_id": "$location.city", "count": {"$sum": 1}}},    # Agrupar por ciudad
+        {"$sort": {"count": -1}},                                       # Ordenar por cantidad
+        {"$limit": 5}                                                   # Solo top 5
+    ]
+    cities_data = list(collection.aggregate(cities_pipeline))
+    top_cities = [{"city": c["_id"], "count": c["count"]} for c in cities_data]
+    
+    # 3. TOP 5 DEPARTAMENTOS CON MÁS EMPLEADOS  
+    # Buscar en el campo: professional.department
+    departments_pipeline = [
+        {"$match": {"professional.department": {"$exists": True, "$ne": None}}},
+        {"$group": {"_id": "$professional.department", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 5}
+    ]
+    departments_data = list(collection.aggregate(departments_pipeline))
+    top_departments = [{"department": d["_id"], "count": d["count"]} for d in departments_data]
+    
+    # 4. SALARIO PROMEDIO
+    salary_pipeline = [
+        {"$match": {"professional.salary": {"$exists": True, "$ne": None}}},
+        {"$group": {"_id": None, "avg_salary": {"$avg": "$professional.salary"}}}
+    ]
+    salary_data = list(collection.aggregate(salary_pipeline))
+    avg_salary = round(salary_data[0]["avg_salary"], 2) if salary_data else 0
+    
+    return {
+        "total_employees": total_employees,
+        "avg_salary": avg_salary,
+        "top_cities": top_cities,
+        "top_departments": top_departments,
+        "last_updated": datetime.now().isoformat(),
+        "data_source": "mongodb",
+        "status": "success"
+    }
 
-@api_router.get("/analytics/summary")
-async def get_analytics():
-    """Datos de analytics para gráficos"""
+# ========================================
+# ENDPOINTS ANALYTICS - GRÁFICOS AVANZADOS
+# ========================================
+
+@api_router.get("/analytics/salary-by-location")
+async def get_salary_by_location():
+    """
+    ANÁLISIS DE SUELDOS POR UBICACIÓN
+    Endpoint: GET /api/analytics/salary-by-location
+    
+    Para crear gráficos de barras o mapas con:
+    - Salario promedio por ciudad
+    - Número de empleados por ciudad
+    
+    Respuesta:
+    {
+        "salary_by_location": [
+            {"city": "Madrid", "avg_salary": 65000.50, "employee_count": 245},
+            ...
+        ]
+    }
+    """
     try:
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
+        collection = get_mongodb()
+        if collection is None:
+            return await get_mock_salary_by_location()
         
-        analytics = {}
-        
-        # Distribución por ciudades
-        cursor.execute("""
-            SELECT location->>'city' as city, COUNT(*) as count 
-            FROM users 
-            WHERE location->>'city' IS NOT NULL 
-            GROUP BY location->>'city' 
-            ORDER BY count DESC
-        """)
-        analytics["cities"] = [{"city": row[0], "count": row[1]} for row in cursor.fetchall()]
-        
-        # Distribución por posiciones
-        cursor.execute("""
-            SELECT professional->>'position' as position, COUNT(*) as count 
-            FROM users 
-            WHERE professional->>'position' IS NOT NULL 
-            GROUP BY professional->>'position' 
-            ORDER BY count DESC
-        """)
-        analytics["positions"] = [{"position": row[0], "count": row[1]} for row in cursor.fetchall()]
-        
-        # Registros por día (últimos 7 días si hay datos)
-        cursor.execute("""
-            SELECT DATE(created_at) as date, COUNT(*) as count
-            FROM users 
-            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-            GROUP BY DATE(created_at)
-            ORDER BY date
-        """)
-        analytics["daily_registrations"] = [
-            {"date": row[0].isoformat(), "count": row[1]}
-            for row in cursor.fetchall()
+        # AGREGACIÓN MONGODB: Agrupar por ciudad y calcular salario promedio
+        pipeline = [
+            {"$match": {
+                "location.city": {"$exists": True, "$ne": None},
+                "professional.salary": {"$exists": True, "$ne": None}
+            }},
+            {"$group": {
+                "_id": "$location.city",
+                "avg_salary": {"$avg": "$professional.salary"},
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"avg_salary": -1}},  # Ordenar por salario más alto
+            {"$limit": 10}
         ]
         
-        conn.close()
+        result = list(collection.aggregate(pipeline))
         
         return {
-            "analytics": analytics,
-            "generated_at": datetime.now().isoformat(),
-            "status": "success"
+            "salary_by_location": [
+                {
+                    "city": item["_id"],
+                    "avg_salary": round(item["avg_salary"], 2),
+                    "employee_count": item["count"]
+                }
+                for item in result
+            ],
+            "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
-        if logger:
-            logger.error(f"Error getting analytics: {e}")
-        raise HTTPException(status_code=500, detail=f"Analytics error: {str(e)}")
+        print(f"❌ Error en salary by location: {e}")
+        return await get_mock_salary_by_location()
 
-# Endpoint mock para desarrollo sin bases de datos
+@api_router.get("/analytics/salary-by-gender")
+async def get_salary_by_gender():
+    """
+    ANÁLISIS DE SUELDOS POR GÉNERO
+    Endpoint: GET /api/analytics/salary-by-gender
+    
+    Para crear gráficos de comparación:
+    - Salario promedio por género
+    - Brecha salarial
+    """
+    try:
+        collection = get_mongodb()
+        if collection is None:
+            return await get_mock_salary_by_gender()
+        
+        pipeline = [
+            {"$match": {
+                "personal.gender": {"$exists": True, "$ne": None},
+                "professional.salary": {"$exists": True, "$ne": None}
+            }},
+            {"$group": {
+                "_id": "$personal.gender",
+                "avg_salary": {"$avg": "$professional.salary"},
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"avg_salary": -1}}
+        ]
+        
+        result = list(collection.aggregate(pipeline))
+        
+        return {
+            "salary_by_gender": [
+                {
+                    "gender": item["_id"],
+                    "avg_salary": round(item["avg_salary"], 2),
+                    "employee_count": item["count"]
+                }
+                for item in result
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ Error en salary by gender: {e}")
+        return await get_mock_salary_by_gender()
+
+@api_router.get("/analytics/salary-by-department")
+async def get_salary_by_department():
+    """
+    ANÁLISIS DE SUELDOS POR DEPARTAMENTO
+    Endpoint: GET /api/analytics/salary-by-department
+    
+    Para crear gráficos detallados:
+    - Salario promedio, mínimo y máximo por departamento
+    - Distribución salarial
+    """
+    try:
+        collection = get_mongodb()
+        if collection is None:
+            return await get_mock_salary_by_department()
+        
+        pipeline = [
+            {"$match": {
+                "professional.department": {"$exists": True, "$ne": None},
+                "professional.salary": {"$exists": True, "$ne": None}
+            }},
+            {"$group": {
+                "_id": "$professional.department",
+                "avg_salary": {"$avg": "$professional.salary"},
+                "min_salary": {"$min": "$professional.salary"},
+                "max_salary": {"$max": "$professional.salary"},
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"avg_salary": -1}},
+            {"$limit": 10}
+        ]
+        
+        result = list(collection.aggregate(pipeline))
+        
+        return {
+            "salary_by_department": [
+                {
+                    "department": item["_id"],
+                    "avg_salary": round(item["avg_salary"], 2),
+                    "min_salary": round(item["min_salary"], 2),
+                    "max_salary": round(item["max_salary"], 2),
+                    "employee_count": item["count"]
+                }
+                for item in result
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ Error en salary by department: {e}")
+        return await get_mock_salary_by_department()
+
+# ========================================
+# DATOS MOCK - PARA DESARROLLO Y TESTING
+# ========================================
+
 @api_router.get("/mock/stats")
 async def get_mock_stats():
-    """Datos mock para desarrollo sin BD"""
+    """
+    DATOS FALSOS PARA DESARROLLO
+    - Se usa cuando MongoDB no está disponible
+    - Permite desarrollar el frontend sin depender de la base de datos
+    """
     return {
-        "total_processed_users": 150,
-        "users_in_cache": 5,
+        "total_employees": 1250,
+        "avg_salary": 65750.50,
         "top_cities": [
-            {"city": "Madrid", "count": 45},
-            {"city": "Barcelona", "count": 32},
-            {"city": "Valencia", "count": 28},
-            {"city": "Sevilla", "count": 22},
-            {"city": "Bilbao", "count": 18}
+            {"city": "Madrid", "count": 345},
+            {"city": "Barcelona", "count": 289},
+            {"city": "Valencia", "count": 178},
+            {"city": "Sevilla", "count": 134},
+            {"city": "Bilbao", "count": 112}
         ],
-        "top_positions": [
-            {"position": "Desarrollador", "count": 35},
-            {"position": "Analista", "count": 28},
-            {"position": "Manager", "count": 22},
-            {"position": "Designer", "count": 18},
-            {"position": "DevOps", "count": 15}
-        ],
-        "recent_activity": [
-            {"user_id": "user_001", "name": "Juan Pérez", "created_at": datetime.now().isoformat()},
-            {"user_id": "user_002", "name": "María García", "created_at": datetime.now().isoformat()},
-            {"user_id": "user_003", "name": "Carlos López", "created_at": datetime.now().isoformat()}
+        "top_departments": [
+            {"department": "Tecnología", "count": 285},
+            {"department": "Ventas", "count": 245},
+            {"department": "Marketing", "count": 189},
+            {"department": "RRHH", "count": 156},
+            {"department": "Finanzas", "count": 123}
         ],
         "last_updated": datetime.now().isoformat(),
         "status": "success"
     }
 
-# Employee Management Endpoints
-@api_router.get("/employee-stats")
-async def get_employee_stats():
-    """Get employee statistics for the employees page"""
-    try:
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
-        
-        # Total employees
-        cursor.execute("SELECT COUNT(*) FROM employees WHERE status = 'active'")
-        total_employees = cursor.fetchone()[0] or 0
-        
-        # Active employees
-        cursor.execute("SELECT COUNT(*) FROM employees WHERE status = 'active'")
-        active_employees = cursor.fetchone()[0] or 0
-        
-        # Departments count
-        cursor.execute("SELECT COUNT(DISTINCT department) FROM employees WHERE department IS NOT NULL")
-        departments = cursor.fetchone()[0] or 0
-        
-        # Recent hires (last 30 days)
-        cursor.execute("""
-            SELECT COUNT(*) FROM employees 
-            WHERE hire_date >= CURRENT_DATE - INTERVAL '30 days'
-        """)
-        recent_hires = cursor.fetchone()[0] or 0
-        
-        cursor.close()
-        conn.close()
-        
-        return {
-            "status": "success",
-            "data": {
-                "total_employees": total_employees,
-                "active_employees": active_employees,
-                "departments": departments,
-                "recent_hires": recent_hires
+async def get_mock_salary_by_location():
+    """DATOS MOCK: Sueldos por ubicación"""
+    cities = ["Madrid", "Barcelona", "Valencia", "Sevilla", "Bilbao", "Zaragoza", "Málaga", "Murcia"]
+    
+    return {
+        "salary_by_location": [
+            {
+                "city": city,
+                "avg_salary": round(random.uniform(50000, 85000), 2),
+                "employee_count": random.randint(50, 250)
             }
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error getting employee stats: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "data": {
-                "total_employees": 0,
-                "active_employees": 0,
-                "departments": 0,
-                "recent_hires": 0
+            for city in cities
+        ],
+        "timestamp": datetime.now().isoformat()
+    }
+
+async def get_mock_salary_by_gender():
+    """DATOS MOCK: Sueldos por género"""
+    return {
+        "salary_by_gender": [
+            {"gender": "Male", "avg_salary": 67500.50, "employee_count": 625},
+            {"gender": "Female", "avg_salary": 64200.75, "employee_count": 580},
+            {"gender": "Other", "avg_salary": 66800.25, "employee_count": 45}
+        ],
+        "timestamp": datetime.now().isoformat()
+    }
+
+async def get_mock_salary_by_department():
+    """DATOS MOCK: Sueldos por departamento"""
+    departments = [
+        {"department": "Tecnología", "avg": 78500, "min": 45000, "max": 120000, "count": 285},
+        {"department": "Finanzas", "avg": 72300, "min": 42000, "max": 95000, "count": 123},
+        {"department": "Ventas", "avg": 68900, "min": 35000, "max": 85000, "count": 245},
+        {"department": "Marketing", "avg": 62500, "min": 38000, "max": 80000, "count": 189},
+        {"department": "RRHH", "avg": 58700, "min": 40000, "max": 75000, "count": 156},
+        {"department": "Operaciones", "avg": 55200, "min": 32000, "max": 70000, "count": 98}
+    ]
+    
+    return {
+        "salary_by_department": [
+            {
+                "department": dept["department"],
+                "avg_salary": float(dept["avg"]),
+                "min_salary": float(dept["min"]),
+                "max_salary": float(dept["max"]),
+                "employee_count": dept["count"]
             }
-        }
-
-@api_router.get("/employees")
-async def get_employees(page: int = 1, limit: int = 20, search: str = "", department: str = "", status: str = ""):
-    """Get paginated employee list with filters"""
-    try:
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
-        
-        # Build query with filters
-        where_conditions = ["1=1"]
-        params = []
-        
-        if search:
-            where_conditions.append("(name ILIKE %s OR email ILIKE %s)")
-            params.extend([f"%{search}%", f"%{search}%"])
-        
-        if department:
-            where_conditions.append("department = %s")
-            params.append(department)
-            
-        if status:
-            where_conditions.append("status = %s")
-            params.append(status)
-        
-        where_clause = " AND ".join(where_conditions)
-        
-        # Get total count
-        cursor.execute(f"SELECT COUNT(*) FROM employees WHERE {where_clause}", params)
-        total_count = cursor.fetchone()[0] or 0
-        
-        # Get paginated results
-        offset = (page - 1) * limit
-        cursor.execute(f"""
-            SELECT id, employee_id, name, email, department, position, status, hire_date
-            FROM employees 
-            WHERE {where_clause}
-            ORDER BY name
-            LIMIT %s OFFSET %s
-        """, params + [limit, offset])
-        
-        employees = []
-        for row in cursor.fetchall():
-            employees.append({
-                "id": row[0],
-                "employee_id": row[1],
-                "name": row[2],
-                "email": row[3],
-                "department": row[4],
-                "position": row[5],
-                "status": row[6],
-                "hire_date": row[7].isoformat() if row[7] else None
-            })
-        
-        cursor.close()
-        conn.close()
-        
-        total_pages = (total_count + limit - 1) // limit
-        
-        return {
-            "status": "success",
-            "employees": employees,
-            "pagination": {
-                "current_page": page,
-                "total_pages": total_pages,
-                "total_count": total_count,
-                "limit": limit
-            }
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error getting employees: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "employees": [],
-            "pagination": {"current_page": 1, "total_pages": 0, "total_count": 0, "limit": limit}
-        }
-
-# Pipeline Control Endpoints
-@api_router.get("/pipeline/status")
-async def get_pipeline_status():
-    """Get current pipeline status"""
-    try:
-        # Get status from Redis or simulate
-        redis_conn = get_redis_connection()
-        
-        # Try to get real status, fallback to simulation
-        kafka_status = redis_conn.get("pipeline:kafka:status") or "running"
-        transform_status = redis_conn.get("pipeline:transform:status") or "running"
-        load_status = redis_conn.get("pipeline:load:status") or "running"
-        
-        overall_status = "running" if all(s == "running" for s in [kafka_status, transform_status, load_status]) else "partial"
-        
-        return {
-            "status": "success",
-            "overall_status": overall_status,
-            "kafka": {
-                "status": kafka_status,
-                "metrics": {
-                    "messages_processed": redis_conn.get("kafka:messages:processed") or "1,247",
-                    "throughput": redis_conn.get("kafka:throughput") or "15.3/sec"
-                }
-            },
-            "transform": {
-                "status": transform_status,
-                "metrics": {
-                    "records_transformed": redis_conn.get("transform:records") or "1,189",
-                    "transformation_rate": redis_conn.get("transform:rate") or "14.1/sec"
-                }
-            },
-            "load": {
-                "status": load_status,
-                "metrics": {
-                    "records_loaded": redis_conn.get("load:records") or "1,156",
-                    "load_rate": redis_conn.get("load:rate") or "13.7/sec"
-                }
-            }
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error getting pipeline status: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "overall_status": "unknown",
-            "kafka": {"status": "unknown", "metrics": {}},
-            "transform": {"status": "unknown", "metrics": {}},
-            "load": {"status": "unknown", "metrics": {}}
-        }
-
-@api_router.post("/pipeline/start")
-async def start_pipeline():
-    """Start the ETL pipeline"""
-    try:
-        redis_conn = get_redis_connection()
-        
-        # Update status in Redis
-        redis_conn.set("pipeline:kafka:status", "running")
-        redis_conn.set("pipeline:transform:status", "running")
-        redis_conn.set("pipeline:load:status", "running")
-        
-        if logger:
-            logger.info("Pipeline started via API")
-        
-        return {
-            "status": "success",
-            "message": "Pipeline iniciado exitosamente"
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error starting pipeline: {e}")
-        return {"status": "error", "detail": str(e)}
-
-@api_router.post("/pipeline/stop")
-async def stop_pipeline():
-    """Stop the ETL pipeline"""
-    try:
-        redis_conn = get_redis_connection()
-        
-        # Update status in Redis
-        redis_conn.set("pipeline:kafka:status", "stopped")
-        redis_conn.set("pipeline:transform:status", "stopped")
-        redis_conn.set("pipeline:load:status", "stopped")
-        
-        if logger:
-            logger.info("Pipeline stopped via API")
-        
-        return {
-            "status": "success",
-            "message": "Pipeline detenido exitosamente"
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error stopping pipeline: {e}")
-        return {"status": "error", "detail": str(e)}
-
-@api_router.post("/pipeline/restart")
-async def restart_pipeline():
-    """Restart the ETL pipeline"""
-    try:
-        # Stop then start
-        await stop_pipeline()
-        await start_pipeline()
-        
-        if logger:
-            logger.info("Pipeline restarted via API")
-        
-        return {
-            "status": "success",
-            "message": "Pipeline reiniciado exitosamente"
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error restarting pipeline: {e}")
-        return {"status": "error", "detail": str(e)}
-
-@api_router.get("/realtime-metrics")
-async def get_realtime_metrics():
-    """Get real-time processing metrics"""
-    try:
-        redis_conn = get_redis_connection()
-        
-        # Get metrics from Redis or simulate
-        records_processed = int(redis_conn.get("metrics:records_processed") or 1247)
-        processing_rate = float(redis_conn.get("metrics:processing_rate") or 15.3)
-        error_rate = float(redis_conn.get("metrics:error_rate") or 0.8)
-        queue_size = int(redis_conn.get("metrics:queue_size") or 45)
-        
-        # Recent activity simulation
-        recent_activity = [
-            {"timestamp": datetime.now().isoformat(), "type": "info", "message": "Batch procesado exitosamente"},
-            {"timestamp": datetime.now().isoformat(), "type": "success", "message": "Conexión a Kafka restablecida"},
-            {"timestamp": datetime.now().isoformat(), "type": "warning", "message": "Cola alcanzó 80% de capacidad"}
-        ]
-        
-        return {
-            "status": "success",
-            "records_processed": records_processed,
-            "processing_rate": processing_rate,
-            "error_rate": error_rate,
-            "queue_size": queue_size,
-            "data_flow": [
-                {"source": "Kafka", "target": "Transform", "count": 45},
-                {"source": "Transform", "target": "Load", "count": 42},
-                {"source": "Load", "target": "PostgreSQL", "count": 38}
-            ],
-            "recent_activity": recent_activity
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error getting realtime metrics: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "records_processed": 0,
-            "processing_rate": 0.0,
-            "error_rate": 0.0,
-            "queue_size": 0,
-            "data_flow": [],
-            "recent_activity": []
-        }
-
-# Enhanced Analytics Endpoints
-@api_router.get("/analytics/kpis")
-async def get_analytics_kpis(period: str = "30d"):
-    """Get KPI metrics for analytics dashboard"""
-    try:
-        conn = get_postgres_connection()
-        cursor = conn.cursor()
-        
-        # Calculate KPIs based on period
-        if period == "7d":
-            date_filter = "WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'"
-        elif period == "90d":
-            date_filter = "WHERE created_at >= CURRENT_DATE - INTERVAL '90 days'"
-        else:  # 30d default
-            date_filter = "WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'"
-        
-        # Total records processed
-        cursor.execute(f"SELECT COUNT(*) FROM processed_records {date_filter}")
-        total_records = cursor.fetchone()[0] or 0
-        
-        # Processing rate (simulate)
-        processing_rate = 12.5
-        
-        # Data quality score (simulate)
-        data_quality = 94.8
-        
-        # Active pipelines
-        active_pipelines = 3
-        
-        # Trends (simulate percentage changes)
-        trends = {
-            "records": 8.5,
-            "processing_rate": 2.3,
-            "data_quality": -0.5,
-            "active_pipelines": 0.0
-        }
-        
-        cursor.close()
-        conn.close()
-        
-        return {
-            "status": "success",
-            "kpis": {
-                "total_records": total_records,
-                "processing_rate": processing_rate,
-                "data_quality": data_quality,
-                "active_pipelines": active_pipelines,
-                "trends": trends
-            }
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error getting analytics KPIs: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "kpis": {
-                "total_records": 0,
-                "processing_rate": 0.0,
-                "data_quality": 0.0,
-                "active_pipelines": 0,
-                "trends": {}
-            }
-        }
-
-@api_router.get("/analytics/etl-metrics")
-async def get_etl_metrics(period: str = "30d"):
-    """Get ETL-specific metrics for analytics"""
-    try:
-        # Data type distribution (matching Kafka structure)
-        data_types = [
-            {"type": "personal_data", "count": 1850},
-            {"type": "location", "count": 1798},
-            {"type": "professional_data", "count": 1832},
-            {"type": "bank_data", "count": 1721},
-            {"type": "net_data", "count": 1689}
-        ]
-        
-        # Processing timeline
-        processing_timeline = [
-            {"timestamp": "2024-01-15T10:00:00", "records_processed": 120},
-            {"timestamp": "2024-01-15T11:00:00", "records_processed": 135},
-            {"timestamp": "2024-01-15T12:00:00", "records_processed": 118},
-            {"timestamp": "2024-01-15T13:00:00", "records_processed": 142},
-            {"timestamp": "2024-01-15T14:00:00", "records_processed": 128}
-        ]
-        
-        # Error analysis
-        errors = [
-            {"type": "Validation Error", "count": 12, "severity": "medium", "description": "Campos requeridos faltantes"},
-            {"type": "Format Error", "count": 8, "severity": "low", "description": "Formato de fecha incorrecto"},
-            {"type": "Connection Error", "count": 3, "severity": "high", "description": "Timeout de base de datos"}
-        ]
-        
-        # Performance metrics
-        performance = {
-            "avg_processing_time": 245.8,  # ms
-            "throughput": 847,  # records/hour
-            "memory_usage": 67.3,  # %
-            "cpu_usage": 23.7  # %
-        }
-        
-        return {
-            "status": "success",
-            "metrics": {
-                "data_types": data_types,
-                "processing_timeline": processing_timeline,
-                "errors": errors,
-                "performance": performance
-            }
-        }
-    except Exception as e:
-        if logger:
-            logger.error(f"Error getting ETL metrics: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "metrics": {
-                "data_types": [],
-                "processing_timeline": [],
-                "errors": [],
-                "performance": {}
-            }
-        }
+            for dept in departments
+        ],
+        "timestamp": datetime.now().isoformat()
+    }
