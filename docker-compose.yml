@@ -29,23 +29,7 @@ services:
     networks:
       - etl-network
 
-  # PostgreSQL
-  postgres:
-    image: postgres:15
-    container_name: postgres_consumer
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - etl-network
-
-  # Redis
+    # Redis
   redis:
     image: redis:latest
     container_name: redis_consumer
@@ -60,6 +44,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: etl_consumer
+    depends_on:
+      - mongo
+      - mysql
+      - redis
     environment:
       IN_DOCKER: "1"
       KAFKA_TOPIC: ${KAFKA_TOPIC}
@@ -84,12 +72,12 @@ services:
     networks:
       - etl-network
     restart: unless-stopped
-    command: >
-      sh -c "
-        echo 'Esperando servicios...' &&
-        sleep 30 &&
-        python -m kafka_consumer.consumer
-      "
+    # command: >
+    #   sh -c "
+    #     echo 'Esperando servicios...' &&
+    #     sleep 30 &&
+    #     python -m kafka_consumer.consumer
+    #   "
 
 volumes:
   mongo_data:
