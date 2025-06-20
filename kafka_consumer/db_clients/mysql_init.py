@@ -24,7 +24,8 @@ mysql_database = os.getenv('MYSQL_DATABASE')
 
 
 # 2. Create connection without specifying the databaseAdd commentMore actions
-mysql_uri_no_db = f"mysql+mysqlconnector://{mysql_user}:{mysql_password}@{mysql_host}/"
+mysql_port = os.getenv('MYSQL_PORT', '3306')
+mysql_uri_no_db = f"mysql+mysqlconnector://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/"
 engine_no_db = create_engine(mysql_uri_no_db, echo=True)
 
 # 3. Create the database if it does not exist
@@ -34,7 +35,7 @@ with engine_no_db.connect() as conn:
 
 
 # 4. Create the connection engine with the database
-mysql_uri = f"mysql+mysqlconnector://{mysql_user}:{mysql_password}@{mysql_host}/{mysql_database}"
+mysql_uri = f"mysql+mysqlconnector://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}"
 engine = create_engine(mysql_uri, echo=False)
 
 # 5. Declare base and models
