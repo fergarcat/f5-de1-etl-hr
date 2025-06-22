@@ -7,7 +7,17 @@ services:
     environment:
       - NIFI_WEB_HTTP_PORT=8080
       - NIFI_WEB_HTTPS_PORT=8080
+
+    networks:
+      - etl-network
     restart: unless-stopped
+
     
 volumes:
   nifi_data:
+
+
+networks:
+  etl-network:
+    name: etl-network
+    external: false
