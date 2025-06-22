@@ -16,7 +16,6 @@ os.chdir(fastapi_dir)
 # Importar y ejecutar la aplicación
 if __name__ == "__main__":
     import uvicorn
-    from main import app
     
     print("🚀 Iniciando HR ETL Dashboard desde la raíz del proyecto...")
     print("📂 Directorio de trabajo:", os.getcwd())
@@ -26,8 +25,9 @@ if __name__ == "__main__":
     print("   Health:      http://localhost:8000/health")
     print("")
     
+    # Usar import string para evitar warnings
     uvicorn.run(
-        app,
+        "main:app",  # Import string format
         host="0.0.0.0",
         port=8000,
         reload=True,

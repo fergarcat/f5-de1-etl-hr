@@ -1,102 +1,125 @@
+// ========================================
+// DASHBOARD.JS - LÓGICA DEL FRONTEND
+// ========================================
 /**
- * Dashboard.js - Dashboard principal de DataTech Solutions
- * Sistema ETL para gestión de datos de RRHH
+ * Este archivo maneja toda la lógica del dashboard:
+ * 1. Cargar datos desde la API (/api/stats)
+ * 2. Crear gráficos con Chart.js
+ * 3. Actualizar contadores y métricas
+ * 4. Auto-refresh cada 30 segundos
  */
 
-// Variables globales
-let dashboardCharts = {};
-let dashboardData = {};
+// ========================================
+// VARIABLES GLOBALES
+// ========================================
+let dashboardCharts = {};  
+let dashboardData = {};    
 
-// Inicialización del dashboard
+// ========================================
+// INICIALIZACIÓN - SE EJECUTA AL CARGAR LA PÁGINA
+// ========================================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 DataTech Solutions - Dashboard ETL iniciado');
     
-    // Cargar datos del dashboard
+    // Cargar datos del dashboard por primera vez
     loadDashboardData();
     
-    // Auto-refresh cada 30 segundos
+    // Auto-refresh: actualizar datos cada 30 segundos
     setInterval(loadDashboardData, 30000);
     
-    // Inicializar controles del pipeline
-    initPipelineControls();
+    console.log('⏰ Auto-refresh configurado cada 30 segundos');
 });
 
-/**
- * Cargar datos del dashboard
- */
+// ========================================
+// FUNCIÓN PRINCIPAL - CARGAR DATOS
+// ========================================
 async function loadDashboardData() {
     try {
         console.log('📊 Cargando datos del dashboard...');
         
-        // Usar endpoint mock para desarrollo
-        const response = await fetch('/api/mock/stats');
+        // PASO 1: Hacer petición HTTP a la API
+        const response = await fetch('/api/stats');
+        
+        // PASO 2: Verificar que la respuesta sea correcta
         if (!response.ok) {
             throw new Error(`Error ${response.status}: ${response.statusText}`);
         }
         
+        // PASO 3: Convertir respuesta a JSON
         const data = await response.json();
-        if (data.status === 'success') {
-            dashboardData = data;
-            
-            // Actualizar métricas ETL
-            updateETLMetrics(data);
-            
-            // Crear gráficos
-            createGeographicChart(data.top_cities);
-            createJobsChart(data.top_positions);
-            
-            // Actualizar pipeline status
-            updatePipelineStatus();
-            
-            console.log('✅ Dashboard actualizado correctamente');
-        }
+        console.log('📈 Datos recibidos:', data);
+        
+        // PASO 4: Guardar datos globalmente
+        dashboardData = data;
+        
+        // PASO 5: Actualizar interfaz con los datos
+        updateDashboardMetrics(data);        // Actualizar contadores
+        createCitiesChart(data.top_cities);  // Crear gráfico de ciudades
+        createDepartmentsChart(data.top_departments); // Crear gráfico de departamentos
+        updateLastSync();                    // Actualizar timestamp
+        
+        console.log('✅ Dashboard actualizado correctamente');
         
     } catch (error) {
         console.error('❌ Error cargando datos del dashboard:', error);
-        showToast('Error al cargar datos del dashboard', 'error');
+        showErrorMessage('Error al cargar datos del dashboard');
     }
 }
 
-/**
- * Actualizar métricas ETL
- */
-function updateETLMetrics(data) {
-    // Total empleados procesados
-    animateCounter('total-employees', data.total_processed_users || 0);
+// ========================================
+// ACTUALIZAR MÉTRICAS Y CONTADORES
+// ========================================
+function updateDashboardMetrics(data) {
+    console.log('📊 Actualizando métricas...');
     
-    // Empresas registradas (contar empresas únicas de top_companies simuladas)
-    const companiesCount = data.top_positions ? data.top_positions.length * 3 : 15;
-    animateCounter('companies-count', companiesCount);
+    // Actualizar total de empleados con animación
+    animateCounter('total-employees', data.total_employees || 0);
     
-    // Tipos de datos siempre 5
-    document.getElementById('data-types-processed').textContent = '5';
+    // Actualizar salario promedio
+    const avgSalaryElement = document.getElementById('avg-salary');
+    if (avgSalaryElement && data.avg_salary) {
+        avgSalaryElement.textContent = `${data.avg_salary.toLocaleString('es-ES')} €`;
+    }
     
-    // Última sincronización
-    const lastSync = new Date().toLocaleTimeString('es-ES');
-    document.getElementById('last-sync').textContent = lastSync;
+    // Actualizar número de ciudades
+    const citiesCountElement = document.getElementById('cities-count');
+    if (citiesCountElement && data.top_cities) {
+        citiesCountElement.textContent = data.top_cities.length;
+    }
+    
+    // Actualizar número de departamentos
+    const departmentsCountElement = document.getElementById('departments-count');
+    if (departmentsCountElement && data.top_departments) {
+        departmentsCountElement.textContent = data.top_departments.length;
+    }
 }
 
-/**
- * Animación de contadores
- */
+// ========================================
+// ANIMACIÓN DE CONTADORES
+// ========================================
 function animateCounter(elementId, targetValue) {
     const element = document.getElementById(elementId);
-    if (!element) return;
+    if (!element) {
+        console.warn(`⚠️ Elemento ${elementId} no encontrado`);
+        return;
+    }
     
     const startValue = 0;
-    const duration = 1500;
+    const duration = 1500; // 1.5 segundos
     const startTime = performance.now();
     
     function updateCounter(currentTime) {
         const elapsedTime = currentTime - startTime;
         const progress = Math.min(elapsedTime / duration, 1);
         
-        // Easing function
+        // Función de easing para animación suave
         const easedProgress = 1 - Math.pow(1 - progress, 3);
         const currentValue = Math.floor(startValue + (targetValue - startValue) * easedProgress);
         
-        element.textContent = currentValue.toLocaleString();
+        // Actualizar el texto del elemento con formato de miles
+        element.textContent = currentValue.toLocaleString('es-ES');
         
+        // Continuar animación si no ha terminado
         if (progress < 1) {
             requestAnimationFrame(updateCounter);
         }
@@ -105,27 +128,34 @@ function animateCounter(elementId, targetValue) {
     requestAnimationFrame(updateCounter);
 }
 
-/**
- * Gráfico de distribución geográfica
- */
-function createGeographicChart(citiesData) {
-    const ctx = document.getElementById('geographicChart');
-    if (!ctx) return;
-    
-    // Destruir gráfico existente
-    if (dashboardCharts.geographic) {
-        dashboardCharts.geographic.destroy();
+// ========================================
+// GRÁFICO DE DISTRIBUCIÓN POR CIUDADES
+// ========================================
+function createCitiesChart(citiesData) {
+    const canvas = document.getElementById('citiesChart');
+    if (!canvas) {
+        console.warn('⚠️ Canvas citiesChart no encontrado');
+        return;
     }
     
+    console.log('🏙️ Creando gráfico de ciudades...');
+    
+    // Destruir gráfico anterior si existe
+    if (dashboardCharts.cities) {
+        dashboardCharts.cities.destroy();
+    }
+    
+    // Colores para el gráfico
     const colors = [
-        '#2a3563',
-        '#3d4878', 
-        '#4a90a4',
-        '#5c7cfa',
-        '#8b7355'
+        '#2a3563', // Azul oscuro
+        '#3d4878', // Azul medio
+        '#4a90a4', // Azul claro
+        '#5c7cfa', // Azul violeta
+        '#8b7355'  // Marrón
     ];
     
-    dashboardCharts.geographic = new Chart(ctx.getContext('2d'), {
+    // Crear gráfico de donut
+    dashboardCharts.cities = new Chart(canvas.getContext('2d'), {
         type: 'doughnut',
         data: {
             labels: citiesData.map(item => item.city),
@@ -157,40 +187,49 @@ function createGeographicChart(citiesData) {
                         label: function(context) {
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                             const percentage = ((context.parsed * 100) / total).toFixed(1);
-                            return `${context.label}: ${context.parsed} (${percentage}%)`;
+                            return `${context.label}: ${context.parsed} empleados (${percentage}%)`;
                         }
                     }
                 }
             }
         }
     });
+    
+    console.log('✅ Gráfico de ciudades creado');
 }
 
-/**
- * Gráfico de puestos de trabajo
- */
-function createJobsChart(jobsData) {
-    const ctx = document.getElementById('jobsChart');
-    if (!ctx) return;
-    
-    // Destruir gráfico existente
-    if (dashboardCharts.jobs) {
-        dashboardCharts.jobs.destroy();
+// ========================================
+// GRÁFICO DE DISTRIBUCIÓN POR DEPARTAMENTOS
+// ========================================
+function createDepartmentsChart(departmentsData) {
+    const canvas = document.getElementById('departmentsChart');
+    if (!canvas) {
+        console.warn('⚠️ Canvas departmentsChart no encontrado');
+        return;
     }
     
-    // Crear gradiente
-    const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+    console.log('🏢 Creando gráfico de departamentos...');
+    
+    // Destruir gráfico anterior si existe
+    if (dashboardCharts.departments) {
+        dashboardCharts.departments.destroy();
+    }
+    
+    // Crear gradiente para las barras
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
     gradient.addColorStop(0, '#2a3563');
     gradient.addColorStop(0.6, '#3d4878');
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0.8)');
     
-    dashboardCharts.jobs = new Chart(ctx.getContext('2d'), {
+    // Crear gráfico de barras
+    dashboardCharts.departments = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: jobsData.map(item => item.position),
+            labels: departmentsData.map(item => item.department),
             datasets: [{
                 label: 'Empleados',
-                data: jobsData.map(item => item.count),
+                data: departmentsData.map(item => item.count),
                 backgroundColor: gradient,
                 borderColor: '#2a3563',
                 borderWidth: 2,
@@ -226,133 +265,133 @@ function createJobsChart(jobsData) {
                 tooltip: {
                     backgroundColor: '#2a3563',
                     titleColor: '#ffffff',
-                    bodyColor: '#ffffff'
+                    bodyColor: '#ffffff',
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.label}: ${context.parsed.y} empleados`;
+                        }
+                    }
                 }
             }
         }
     });
-}
-
-/**
- * Actualizar estado del pipeline
- */
-function updatePipelineStatus() {
-    // Actualizar contador de mensajes Kafka (simulado)
-    const kafkaCounter = document.getElementById('kafka-messages');
-    if (kafkaCounter) {
-        const randomMessages = Math.floor(Math.random() * 50) + 20;
-        kafkaCounter.textContent = randomMessages;
-    }
     
-    // Animar iconos del pipeline
-    const stageIcons = document.querySelectorAll('.stage-icon');
-    stageIcons.forEach(icon => {
-        icon.classList.add('active');
-    });
+    console.log('✅ Gráfico de departamentos creado');
 }
 
-/**
- * Controles del pipeline
- */
-function initPipelineControls() {
-    // Los botones ya tienen onclick en el HTML
-    console.log('🔧 Controles del pipeline inicializados');
-}
+// ========================================
+// FUNCIONES AUXILIARES
+// ========================================
 
-/**
- * Iniciar procesamiento ETL
- */
-function startETLProcess() {
-    console.log('▶️ Iniciando procesamiento ETL...');
-    showToast('Procesamiento ETL iniciado', 'success');
-    updatePipelineStatus();
-}
-
-/**
- * Pausar procesamiento ETL
- */
-function pauseETLProcess() {
-    console.log('⏸️ Pausando procesamiento ETL...');
-    showToast('Procesamiento ETL pausado', 'warning');
-}
-
-// Agregar estilos CSS específicos para el pipeline
-const pipelineStyles = `
-<style>
-.pipeline-stage {
-    display: flex;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding: 1.5rem;
-    background: rgba(42, 53, 99, 0.05);
-    border-radius: 8px;
-    border-left: 4px solid #2a3563;
-    transition: all 0.3s ease;
-}
-
-.pipeline-stage:hover {
-    background: rgba(42, 53, 99, 0.08);
-    transform: translateX(5px);
-}
-
-.stage-icon {
-    width: 60px;
-    height: 60px;
-    background: #e9ecef;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 1.5rem;
-    transition: all 0.3s ease;
-    font-size: 1.5rem;
-    color: #6c757d;
-}
-
-.stage-icon.active {
-    background: linear-gradient(135deg, #2a3563, #3d4878);
-    color: white;
-    box-shadow: 0 4px 15px rgba(42, 53, 99, 0.3);
-    animation: pulse 2s infinite;
-}
-
-.stage-info h6 {
-    margin: 0 0 0.5rem 0;
-    color: #2a3563;
-    font-weight: 600;
-    font-size: 1.1rem;
-}
-
-.stage-info small {
-    font-size: 0.9rem;
-    line-height: 1.4;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-}
-
-@media (max-width: 768px) {
-    .pipeline-stage {
-        flex-direction: column;
-        text-align: center;
-        padding: 1rem;
+function updateLastSync() {
+    /**
+     * Actualizar timestamp de última sincronización
+     */
+    const lastSyncElement = document.getElementById('last-sync');
+    if (lastSyncElement) {
+        const now = new Date();
+        lastSyncElement.textContent = now.toLocaleTimeString('es-ES');
     }
+}
+
+function showErrorMessage(message) {
+    /**
+     * Mostrar mensaje de error al usuario
+     */
+    console.error('💥 Error:', message);
     
-    .stage-icon {
-        margin-right: 0;
-        margin-bottom: 1rem;
+    // Crear notificación de error (si existe el elemento)
+    const errorElement = document.getElementById('error-message');
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+        
+        // Ocultar después de 5 segundos
+        setTimeout(() => {
+            errorElement.style.display = 'none';
+        }, 5000);
     }
 }
-</style>
-`;
 
-// Inyectar estilos
-if (!document.getElementById('dashboard-pipeline-css')) {
-    const style = document.createElement('style');
-    style.id = 'dashboard-pipeline-css';
-    style.innerHTML = pipelineStyles;
-    document.head.appendChild(style);
+// ========================================
+// FUNCIONES PARA ANALYTICS (PÁGINA SEPARADA)
+// ========================================
+
+function loadAnalyticsData() {
+    /**
+     * Cargar datos para la página de analytics
+     * Esta función se puede llamar desde analytics.html
+     */
+    console.log('📈 Cargando datos de analytics...');
+    
+    // Cargar datos de sueldos por ubicación
+    loadSalaryByLocation();
+    
+    // Cargar datos de sueldos por género
+    loadSalaryByGender();
+    
+    // Cargar datos de sueldos por departamento
+    loadSalaryByDepartment();
 }
+
+async function loadSalaryByLocation() {
+    try {
+        const response = await fetch('/api/analytics/salary-by-location');
+        const data = await response.json();
+        
+        // Crear gráfico de sueldos por ubicación
+        createSalaryLocationChart(data.salary_by_location);
+        
+    } catch (error) {
+        console.error('Error cargando sueldos por ubicación:', error);
+    }
+}
+
+async function loadSalaryByGender() {
+    try {
+        const response = await fetch('/api/analytics/salary-by-gender');
+        const data = await response.json();
+        
+        // Crear gráfico de sueldos por género
+        createSalaryGenderChart(data.salary_by_gender);
+        
+    } catch (error) {
+        console.error('Error cargando sueldos por género:', error);
+    }
+}
+
+async function loadSalaryByDepartment() {
+    try {
+        const response = await fetch('/api/analytics/salary-by-department');
+        const data = await response.json();
+        
+        // Crear gráfico de sueldos por departamento
+        createSalaryDepartmentChart(data.salary_by_department);
+        
+    } catch (error) {
+        console.error('Error cargando sueldos por departamento:', error);
+    }
+}
+
+function createSalaryLocationChart(data) {
+    // TODO: Implementar gráfico de sueldos por ubicación
+    console.log('🗺️ Datos de sueldos por ubicación:', data);
+}
+
+function createSalaryGenderChart(data) {
+    // TODO: Implementar gráfico de sueldos por género
+    console.log('👥 Datos de sueldos por género:', data);
+}
+
+function createSalaryDepartmentChart(data) {
+    // TODO: Implementar gráfico de sueldos por departamento
+    console.log('🏢 Datos de sueldos por departamento:', data);
+}
+
+// ========================================
+// EXPOSICIÓN GLOBAL DE FUNCIONES
+// ========================================
+// Hacer funciones disponibles globalmente para uso en HTML
+window.loadAnalyticsData = loadAnalyticsData;
+window.dashboardCharts = dashboardCharts;
+window.dashboardData = dashboardData;
