@@ -194,7 +194,8 @@ body {
 
 .stats-card:hover {
     transform: translateY(-5px);
-    box-shadow: var(--shadow-medium);
+    box-shadow: var(--shadow-strong);
+    transition: var(--transition-medium);
 }
 
 .stats-card.primary-card {
@@ -222,17 +223,20 @@ body {
     font-weight: 700;
     margin: 0;
     line-height: 1;
+    color: var(--white) !important;
 }
 
 .stats-label {
     font-size: 0.95rem;
     opacity: 0.9;
     font-weight: 500;
+    color: var(--white) !important;
 }
 
 .stats-icon {
     font-size: 2.5rem;
     opacity: 0.3;
+    color: var(--white) !important;
 }
 
 /* ================== CHART CARDS ================== */
@@ -246,6 +250,7 @@ body {
 
 .chart-card:hover {
     box-shadow: var(--shadow-medium);
+    transition: var(--transition-medium);
 }
 
 .chart-header {
@@ -338,10 +343,9 @@ body {
 }
 
 .btn-custom:hover {
-    color: var(--white);
-    border-color: var(--primary-color);
+    background: var(--primary-light);
     transform: translateY(-2px);
-    box-shadow: var(--shadow-medium);
+    box-shadow: 0 4px 12px rgba(42, 53, 99, 0.3);
 }
 
 .btn-custom * {
@@ -368,7 +372,7 @@ body {
 }
 
 .footer-brand {
-    
+    margin-bottom: var(--spacing-sm);
 }
 
 .footer-title {
@@ -385,7 +389,17 @@ body {
 
 /* Tech Stack */
 .tech-stack {
-    
+    text-align: center;
+}
+
+/* Social Section */
+.social-section {
+    text-align: center;
+}
+
+.social-section .text-muted {
+    color: rgba(255, 255, 255, 0.6) !important;
+    margin-bottom: 0.5rem;
 }
 
 .tech-icons {
@@ -416,6 +430,7 @@ body {
     display: flex;
     gap: var(--spacing-sm);
     justify-content: center;
+    align-items: center;
 }
 
 .social-link {
@@ -575,3 +590,383 @@ body {
 .stats-card:nth-child(2) { animation-delay: 0.2s; }
 .stats-card:nth-child(3) { animation-delay: 0.3s; }
 .stats-card:nth-child(4) { animation-delay: 0.4s; }
+/* ================== DATA FLOW STYLES ================== */
+.data-flow-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 2rem 0;
+    min-height: 120px;
+}
+
+.flow-step {
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+    padding: 1rem;
+    border-radius: var(--border-radius);
+    background: rgba(255, 255, 255, 0.5);
+    transition: var(--transition-medium);
+    position: relative;
+}
+
+.flow-step:hover {
+    background: rgba(255, 255, 255, 0.8);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-soft);
+}
+
+.flow-step.active {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+    color: white;
+    box-shadow: var(--shadow-medium);
+}
+
+.flow-step.active .flow-icon {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.flow-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.5rem;
+    font-size: 1.2rem;
+    transition: var(--transition-medium);
+}
+
+.flow-icon.kafka {
+    background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+    color: white;
+}
+
+.flow-icon.mongodb {
+    background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%);
+    color: white;
+}
+
+.flow-icon.nifi {
+    background: linear-gradient(135deg, #2196f3 0%, #03a9f4 100%);
+    color: white;
+}
+
+.flow-icon.mysql {
+    background: linear-gradient(135deg, #ff9800 0%, #ffc107 100%);
+    color: white;
+}
+
+.flow-icon.dashboard {
+    background: linear-gradient(135deg, #9c27b0 0%, #e91e63 100%);
+    color: white;
+}
+
+.flow-arrow {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    opacity: 0.6;
+    animation: flowPulse 2s ease-in-out infinite;
+}
+
+.flow-step h6 {
+    margin: 0.5rem 0 0.25rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.flow-step small {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+@keyframes flowPulse {
+    0%, 100% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+}
+
+/* Responsive design for data flow */
+@media (max-width: 768px) {
+    .data-flow-container {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .flow-arrow {
+        transform: rotate(90deg);
+    }
+    
+    .flow-step {
+        min-width: 200px;
+        width: 100%;
+    }
+}
+
+/* ================== CLOCK ANIMATION ================== */
+.current-time {
+    font-weight: 500;
+}
+
+#current-time {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+}
+
+/* ================== ENHANCED STATS CARDS ================== */
+.stats-number {
+    font-weight: 700;
+    font-size: 2rem;
+    background: linear-gradient(45deg, var(--primary-color), var(--primary-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stats-icon i {
+    font-size: 1.5rem;
+}
+
+/* ================== PAGE HEADER ================== */
+.page-header {
+    text-align: center;
+    padding: 2rem 0;
+    border-bottom: 1px solid rgba(42, 53, 99, 0.1);
+}
+
+.page-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.page-subtitle {
+    font-size: 1.1rem;
+    color: rgba(42, 53, 99, 0.7);
+    margin: 0;
+}
+
+/* ================== MEJORAS ADICIONALES DE INTERFAZ ================== */
+
+/* Efectos hover para las cards de estadísticas */
+.stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-strong);
+    transition: var(--transition-medium);
+}
+
+/* Efectos hover para las cards de gráficos */
+.chart-card:hover {
+    box-shadow: var(--shadow-medium);
+    transition: var(--transition-medium);
+}
+
+/* Botones de exportar con hover */
+.btn-custom:hover {
+    background: var(--primary-light);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(42, 53, 99, 0.3);
+}
+
+/* Navegación activa mejorada */
+.nav-link.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.2);
+}
+
+/* Estado del sistema con animación */
+.api-status .fas.fa-circle {
+    animation: statusPulse 2s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Indicadores de flujo de datos mejorados */
+.flow-step:hover .flow-icon {
+    transform: scale(1.1);
+    transition: var(--transition-fast);
+}
+
+/* Badge de sistema activo */
+.badge.bg-success {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+/* Tooltip personalizado para iconos */
+[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary-color);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+/* Animación suave para carga de gráficos */
+.chart-container {
+    opacity: 0;
+    animation: fadeInChart 1s ease-in-out forwards;
+}
+
+@keyframes fadeInChart {
+    0% {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Mejoras para responsive design */
+@media (max-width: 576px) {
+    .page-title {
+        font-size: 1.8rem;
+    }
+    
+    .stats-number {
+        font-size: 1.5rem;
+    }
+    
+    .flow-step {
+        padding: 0.75rem;
+    }
+    
+    .flow-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+}
+
+/* ================== ANALYTICS ENHANCEMENTS ================== */
+.company-item {
+    transition: var(--transition-fast);
+    border: 1px solid transparent;
+}
+
+.company-item:hover {
+    background: rgba(42, 53, 99, 0.1) !important;
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.analytics-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.analytics-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.analytics-list::-webkit-scrollbar-track {
+    background: rgba(42, 53, 99, 0.1);
+    border-radius: 3px;
+}
+
+.analytics-list::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 3px;
+}
+
+/* Chart loading state */
+.chart-container.loading {
+    position: relative;
+}
+
+.chart-container.loading::before {
+    content: 'Cargando datos...';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 1rem 2rem;
+    border-radius: var(--border-radius);
+    z-index: 10;
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+/* Enhanced chart controls */
+.chart-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.chart-controls .form-select {
+    min-width: 150px;
+    font-size: 0.875rem;
+}
+
+/* Improved stats cards animation */
+.stats-card .stats-number {
+    transition: all var(--transition-medium);
+}
+
+.stats-card:hover .stats-number {
+    transform: scale(1.05);
+}
+
+/* Analytics page specific improvements */
+.chart-card .chart-header {
+    background: var(--gradient-card);
+    border-bottom: 1px solid rgba(42, 53, 99, 0.1);
+}
+
+.chart-card .chart-title {
+    color: var(--primary-color);
+    font-weight: 600;
+    margin: 0;
+}
+
+/* Responsive improvements for analytics */
+@media (max-width: 768px) {
+    .chart-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.25rem;
+    }
+    
+    .chart-controls .btn {
+        width: 100%;
+    }
+    
+    .company-item {
+        font-size: 0.875rem;
+    }
+    
+    .analytics-list {
+        max-height: 250px;
+    }
+}

@@ -1,34 +1,36 @@
 # 🚀 Sistema ETL de Recursos Humanos - DataTech Solutions
 
-> **Proyecto Formativo de Data Engineering:** Proceso ETL completo con dashboard web para gestión de datos de RRHH
+> **Proyecto Formativo de Data Engineering:** Sistema ETL completo con dashboard web interactivo para procesamiento y análisis de datos de RRHH en tiempo real
 
-![Python](https://img.shields.io/badge/Python-3.10-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104-green.svg)
 ![Docker](https://img.shields.io/badge/Docker-Compose-blue.svg)
 ![Kafka](https://img.shields.io/badge/Apache-Kafka-red.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-blue.svg)
 ![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green.svg)
-![Redis](https://img.shields.io/badge/Redis-Latest-red.svg)
+![Redis](https://img.shields.io/badge/Redis-7-red.svg)
 
 ## 📋 Descripción del Proyecto
 
-Este es un **sistema ETL (Extract, Transform, Load) completo** diseñado para procesar datos de empleados en tiempo real. El proyecto combina múltiples tecnologías modernas para crear una pipeline robusta de procesamiento de datos con interfaz web interactiva.
+Este es un **sistema ETL (Extract, Transform, Load) completo** diseñado para procesar datos de empleados en tiempo real usando tecnologías modernas de Big Data. El proyecto implementa una arquitectura de microservicios que permite gestionar grandes volúmenes de datos de recursos humanos de manera eficiente y escalable.
 
-### 🎯 Objetivos
-- Procesar datos de empleados desde Kafka en tiempo real
-- Almacenar datos en múltiples bases de datos (PostgreSQL, MongoDB, MySQL)
-- Proporcionar un dashboard web moderno para visualización
-- Implementar cache inteligente con Redis
-- Generar analytics y reportes en tiempo real
+### 🎯 ¿Qué hace este sistema?
+
+1. **📥 EXTRAE** datos de empleados desde Apache Kafka (streaming de datos)
+2. **🔄 TRANSFORMA** y valida la información usando Python
+3. **📊 ALMACENA** los datos en múltiples bases de datos especializadas
+4. **🌐 VISUALIZA** todo a través de un dashboard web moderno e interactivo
 
 ### ✨ Características Principales
+
 - ⚡ **Procesamiento en tiempo real** con Apache Kafka
-- 🗄️ **Multi-base de datos:** PostgreSQL, MongoDB, MySQL, Redis
-- 🌐 **Dashboard web moderno** con FastAPI + HTML/CSS/JS
-- 📊 **Analytics interactivos** con Chart.js
-- 🐳 **Containerización completa** con Docker Compose
-- 🔄 **Pipeline ETL automatizada** con monitoreo
-- 📱 **Interfaz responsive** y moderna
+- 🗄️ **Arquitectura multi-database:** MySQL, MongoDB, Redis
+- 🌐 **Dashboard web completo** con FastAPI + HTML/CSS/JavaScript
+- 📊 **Analytics interactivos** con Chart.js y visualizaciones dinámicas
+- 🐳 **Containerización completa** con Docker Compose (8 servicios)
+- 🔄 **Pipeline ETL automatizada** con monitoreo en tiempo real
+- 📱 **Interfaz responsive** y moderna con Bootstrap 5
+- 🎨 **UI/UX profesional** con elementos interactivos y notificaciones
 
 ## 🏗️ Arquitectura del Sistema
 
@@ -45,12 +47,14 @@ Este es un **sistema ETL (Extract, Transform, Load) completo** diseñado para pr
                     └─────────────────┘    └─────────────────┘
 ```
 
-### 🔄 Flujo de Datos
+### 🔄 Flujo de Datos Actual
 1. **Extract:** Kafka consume mensajes con datos de empleados
 2. **Transform:** ETL Consumer procesa y valida los datos
-3. **Load:** Almacenamiento en PostgreSQL (principal) + MongoDB (raw) + MySQL (normalizado)
+3. **Load:** Almacenamiento en MySQL (principal) + MongoDB (raw) + Redis (cache)
 4. **Cache:** Redis almacena datos temporales para optimización
 5. **Visualize:** Dashboard web muestra métricas en tiempo real
+
+> **💡 Estado Actual:** El sistema funciona completamente con FastAPI + MySQL, y tiene capacidad para integrar Kafka + MongoDB + Redis cuando se active el stack completo con Docker.
 
 ## 📁 Estructura Detallada del Proyecto
 
@@ -127,9 +131,8 @@ f5-de1-etl-hr/
 - **Redis-py** - Cliente Redis para cache
 
 ### Bases de Datos
-- **PostgreSQL** - Base de datos principal (datos procesados)
+- **MySQL** - Base de datos principal (datos procesados y normalizados)
 - **MongoDB** - Almacenamiento de datos raw/documentos
-- **MySQL** - Base de datos normalizada (relacional)
 - **Redis** - Cache en memoria para datos temporales
 
 ### Frontend & UI
@@ -146,83 +149,105 @@ f5-de1-etl-hr/
 
 ## 🚀 Guía de Instalación y Ejecución
 
-### Pre-requisitos
-- Docker y Docker Compose instalados
-- Python 3.10+ (para desarrollo local)
-- Git (para clonar el repositorio)
+### ✅ **OPCIÓN 1: DESARROLLO RÁPIDO (Recomendado)**
 
-### Paso 1: Clonar el Proyecto
-```bash
-git clone <repository-url>
-cd f5-de1-etl-hr
+Esta es la forma más rápida de probar el sistema. Solo necesitas Python instalado.
+
+#### Paso 1: Verificar dependencias
+```powershell
+# Verificar que Python esté instalado
+python --version
+
+# Instalar dependencias del proyecto
+pip install -r requirements.txt
 ```
 
-### Paso 2: Configurar Variables de Entorno
-Crear archivo `.env` en la raíz del proyecto:
-
-```bash
-# Kafka Configuration
-KAFKA_TOPIC=hr_data
-KAFKA_GROUP_ID=hr_consumer_group
-KAFKA_BROKER=kafka:9092
-
-# MongoDB Configuration
-MONGO_INITDB_ROOT_USERNAME=admin
-MONGO_INITDB_ROOT_PASSWORD=password123
-MONGODB_DB_NAME=hr_database
-MONGO_COLLECTION=raw_employee_data
-MONGO_HOST=mongo_consumer
-MONGO_PORT=27017
-
-# MySQL Configuration
-MYSQL_ROOT_PASSWORD=rootpassword
-MYSQL_DATABASE=hr_mysql
-MYSQL_USER=hr_user
-MYSQL_PASSWORD=hr_password
-MYSQL_HOST=mysql_consumer
-
-# PostgreSQL Configuration
-POSTGRES_DB=hr_postgres
-POSTGRES_USER=hr_user
-POSTGRES_PASSWORD=hr_password
-POSTGRES_HOST=postgres_consumer
-POSTGRES_PORT=5432
-
-# Redis Configuration
-REDIS_HOST=redis_consumer
-REDIS_PORT=6379
-```
-
-### Paso 3: Levantar el Sistema Completo
-
-#### Opción A: Todo con Docker (Recomendado)
-```bash
-# Levantar todos los servicios
-docker-compose up --build -d
-
-# Ver logs del sistema
-docker-compose logs -f etl_consumer
-```
-
-#### Opción B: Desarrollo Híbrido
-```bash
-# Solo bases de datos con Docker
-docker-compose up -d mongo mysql redis
-
-# FastAPI en local para desarrollo
+#### Paso 2: Levantar FastAPI (sin Docker)
+```powershell
+# Navegar al directorio de FastAPI
 cd fastapi
-pip install -r ../requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# ETL Consumer en local
-python -m kafka_consumer.consumer
+# Levantar el servidor de desarrollo
+python main.py
 ```
 
-### Paso 4: Acceder al Dashboard
-- **Dashboard Principal:** http://localhost:8000
-- **Analytics:** http://localhost:8000/analytics  
-- **API Documentation:** http://localhost:8000/docs
-- **Health Check:** http://localhost:8000/health
+#### Paso 3: Acceder al sistema
+- **🏠 Dashboard Principal**: http://localhost:8000
+- **📈 Analytics Avanzados**: http://localhost:8000/analytics
+- **📚 API Documentation**: http://localhost:8000/docs
+- **❤️ Health Check**: http://localhost:8000/health
+
+> **💡 Nota:** En esta modalidad, el sistema funciona con datos de ejemplo. MySQL se conectará automáticamente si está disponible, sino usará datos demo.
+
+---
+
+### 🐳 **OPCIÓN 2: SISTEMA COMPLETO CON DOCKER**
+
+Para experimentar con todo el stack ETL completo incluyendo Kafka, MongoDB, MySQL y Redis.
+
+#### Paso 1: Verificar Docker
+```powershell
+# Verificar instalación de Docker
+docker --version
+docker-compose --version
+```
+
+#### Paso 2: Configurar variables de entorno
+El archivo `.env` ya está configurado con valores por defecto. Opcional: modificar según necesidades.
+
+#### Paso 3: Levantar todos los servicios
+```powershell
+# Levantar todo el stack completo
+docker-compose up -d
+
+# Ver logs en tiempo real
+docker-compose logs -f
+
+# Ver estado de todos los containers
+docker-compose ps
+```
+
+#### Paso 4: Verificar servicios
+```powershell
+# Health check del sistema
+curl http://localhost:8000/health
+
+# O usar PowerShell
+Invoke-RestMethod -Uri "http://localhost:8000/health" -Method GET
+```
+
+---
+
+### 🧪 **EJECUTAR TESTS Y VERIFICACIONES**
+
+#### Tests básicos del sistema
+```powershell
+# Health check simple y rápido
+python tests/test.py
+
+# Ejecutar suite completa de tests
+python run_tests.py
+
+# Solo tests unitarios (más rápidos)
+python run_tests.py --unit
+
+# Solo tests de integración
+python run_tests.py --integration
+
+# Verificar estado del sistema
+python status.py
+```
+
+#### Tests específicos con pytest
+```powershell
+# Instalar dependencias de testing
+pip install -r tests/requirements_test.txt
+
+# Ejecutar tests específicos
+pytest tests/test_api_unit.py -v
+pytest tests/test_integration.py -v
+pytest tests/test_components.py -v
+```
 
 ## 📊 Funcionalidades Detalladas
 
@@ -374,7 +399,26 @@ docker stats
 
 ### Problemas Comunes
 
-#### 1. **Error de conexión a Kafka**
+#### 1. **Error: "Module not found"**
+```powershell
+# Instalar dependencias faltantes
+pip install fastapi uvicorn mysql-connector-python python-dotenv
+```
+
+#### 2. **Error: "Port 8000 already in use"**
+```powershell
+# Encontrar proceso usando el puerto
+netstat -ano | findstr :8000
+
+# Matar proceso si es necesario
+taskkill /PID <PID_NUMBER> /F
+```
+
+#### 3. **Error: "MySQL connection failed"**
+- El sistema funciona con datos de ejemplo si MySQL no está disponible
+- Para usar MySQL real, levantar con Docker: `docker-compose up mysql -d`
+
+#### 4. **Error de conexión a Kafka**
 ```bash
 # Verificar que Kafka esté corriendo
 docker-compose logs kafka
@@ -415,6 +459,51 @@ Si ves errores sobre variables de entorno, asegúrate de que el archivo `.env` e
 - Verificar recursos de Docker: RAM mínimo 4GB recomendado
 - Monitorear logs para identificar cuellos de botella
 - Usar `docker stats` para ver uso de recursos
+
+## 🎯 **COMANDOS MÁS USADOS**
+
+```powershell
+# Desarrollo rápido
+cd fastapi; python main.py
+
+# Ver logs en tiempo real
+docker-compose logs -f
+
+# Reiniciar servicios
+docker-compose restart
+
+# Limpiar todo
+docker-compose down -v
+
+# Tests completos
+python run_tests.py
+
+# Verificar estado del sistema
+python status.py
+```
+
+## 📁 **ESTRUCTURA ACTUAL DEL PROYECTO**
+```
+f5-de1-etl-hr/
+├── fastapi/           # 🌐 Aplicación web
+│   ├── main.py        # Servidor principal FastAPI
+│   ├── routers/       # 🛣️ API endpoints y frontend
+│   ├── static/        # 🎨 CSS, JS, imágenes
+│   └── templates/     # 📄 HTML pages
+├── tests/             # 🧪 Tests del sistema
+│   ├── test.py        # Health check básico
+│   ├── test_api_unit.py
+│   ├── test_integration.py
+│   └── test_components.py
+├── kafka_consumer/    # ⚙️ Procesador ETL
+│   ├── consumer.py    # Consumidor Kafka
+│   ├── etl.py         # Lógica ETL
+│   └── db_clients/    # 🗄️ Clientes BD
+├── docker-compose.yml # 🐳 Configuración Docker
+├── requirements.txt   # 📦 Dependencias Python
+├── status.py          # 🔍 Script verificación estado
+└── SETUP_GUIDE.md     # 📖 Guía de instalación
+```
 
 ## 📈 Próximas Mejoras
 

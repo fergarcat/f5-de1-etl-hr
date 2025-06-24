@@ -1,119 +1,135 @@
 import json
-import os
-import socket
-import time
-from dotenv import load_dotenv
+import logging
 from kafka import KafkaConsumer
-from kafka_consumer.etl import process_message
-from kafka_consumer.db_clients import sql, redis
-from kafka_consumer.db_clients.mongo import insert_raw_data
-from config.logger_config import logger
-from config import mongodb_config as mdb
+from datetime import datetime
+import os
+from dotenv import load_dotenv
 
+# Load environment variables FIRST
 load_dotenv()
 
-REQUIRED_TYPES = {
-    "personal": {"email", "name", "passport", "sex", "telfnumber"},
-    "location": {"address", "city", "postal_code"},
-    "professional": {"company", "job", "company_email"},
-    "bank": {"IBAN", "salary"},
-    "net": {"IPv4"}
-}
+# Now import our modules
+from kafka_consumer.db_clients import mongo, redis, sql
+from kafka_consumer.etl import transform_data
+from config.logger_config import setup_logging
 
-def safe_json_deserializer(m):
-    if not m:
-        logger.warning("⚠️ Mensaje vacío recibido.")
-        return None
-    try:
-        return json.loads(m.decode('utf-8'))
-    except Exception as e:
-        logger.warning(f"⚠️ Error al deserializar mensaje: {m} - {e}")
-        return None
+# Setup logging
+setup_logging()
+logger = logging.getLogger(__name__)
 
-def wait_for_kafka(host: str, port: int, timeout: int = 60):
-    logger.info(f"⏳ Esperando a Kafka en {host}:{port}...")
-    start_time = time.time()
-    while True:
+class HRETLConsumer:
+    def __init__(self):
+        """Initialize Kafka consumer and database connections"""
+        self.setup_kafka_consumer()
+        self.mongo_client = mongo.mongo_client
+        self.redis_client = redis.redis_client
+        self.sql_client = sql.mysql_client
+        
+        logger.info("✅ HR ETL Consumer initialized successfully")
+
+    def setup_kafka_consumer(self):
+        """Setup Kafka consumer with environment variables"""
         try:
-            with socket.create_connection((host, port), timeout=2):
-                logger.info("✅ Kafka está disponible.")
-                return
-        except OSError:
-            if time.time() - start_time > timeout:
-                logger.error(f"❌ Kafka no respondió tras {timeout} segundos.")
-                raise TimeoutError("Kafka no disponible.")
-            time.sleep(2)
-
-def run_consumer():
-    logger.info("### CONSUMIDOR KAFKA INICIADO ###")
-
-    kafka_broker = os.getenv("KAFKA_BROKER", "kafka:9092")
-    kafka_host, kafka_port_str = kafka_broker.split(":")
-    kafka_port = int(kafka_port_str)
-    wait_for_kafka(kafka_host, kafka_port)
-
-    try:
-        consumer = KafkaConsumer(
-            os.getenv("KAFKA_TOPIC"),
-            bootstrap_servers=kafka_broker,
-            auto_offset_reset='earliest',
-            enable_auto_commit=True,
-            group_id=os.getenv("KAFKA_GROUP_ID", "etl-group"),
-            value_deserializer=safe_json_deserializer
-        )
-    except Exception as e:
-        logger.error(f"❌ Error al crear el consumidor Kafka: {e}")
-        return
-
-    mongodb = mdb.MongoDbConnection()
-    mongodb.connect()
-
-    logger.info("🕒 Esperando mensajes...")
-
-    for message in consumer:
-        raw_data = message.value
-        if raw_data is None:
-            continue  # ignorar mensajes vacíos o mal deserializados
-
-        logger.info(f"📥 Mensaje recibido: {raw_data}")
-
-        try:
-            insert_raw_data(raw_data)
+            kafka_servers = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
+            topic = os.getenv('KAFKA_TOPIC', 'hr-employee-data')
+            group_id = os.getenv('KAFKA_GROUP_ID', 'hr-etl-consumer')
+            
+            self.consumer = KafkaConsumer(
+                topic,
+                bootstrap_servers=[kafka_servers],
+                group_id=group_id,
+                auto_offset_reset='latest',
+                enable_auto_commit=True,
+                value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+                consumer_timeout_ms=10000
+            )
+            
+            logger.info(f"✅ Kafka consumer connected to {kafka_servers}, topic: {topic}")
+            
         except Exception as e:
-            logger.warning(f"⚠️ Error insertando en MongoDB: {e}")
+            logger.error(f"❌ Error setting up Kafka consumer: {e}")
+            raise
 
-        user_id = raw_data.get("user_id") or raw_data.get("id")
-        data_type = raw_data.get("type")
+    def process_message(self, message_value):
+        """Process individual Kafka message"""
+        try:
+            logger.info(f"📨 Processing message: {message_value.get('id', 'unknown')}")
+            
+            # 1. Store raw data in MongoDB (for audit)
+            mongo_result = self.store_raw_data(message_value)
+            
+            # 2. Transform data
+            transformed_data = transform_data(message_value)
+            if not transformed_data:
+                logger.error("❌ Data transformation failed")
+                return False
+            
+            # 3. Store transformed data in MySQL
+            sql_result = sql.store_transformed(transformed_data)
+            
+            # 4. Update cache in Redis
+            redis_result = self.update_cache(transformed_data)
+            
+            # Log results
+            logger.info(f"📊 Processing results - MongoDB: {mongo_result}, MySQL: {sql_result}, Redis: {redis_result}")
+            
+            return sql_result
+            
+        except Exception as e:
+            logger.error(f"❌ Error processing message: {e}")
+            return False
 
-        if not user_id or not data_type or data_type not in REQUIRED_TYPES:
-            logger.warning(f"⚠️ Mensaje inválido: user_id={user_id}, type={data_type}")
-            continue
+    def store_raw_data(self, data):
+        """Store raw data in MongoDB"""
+        try:
+            # Add timestamp
+            data['processed_at'] = datetime.utcnow().isoformat()
+            
+            # Store in MongoDB
+            result = self.mongo_client.store_raw_employee(data)
+            logger.info(f"✅ Raw data stored in MongoDB: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Error storing raw data: {e}")
+            return False
 
-        logger.info(f"💾 Cacheando tipo '{data_type}' para user_id '{user_id}'")
-        redis.cache_partial(user_id, data_type, raw_data)
+    def update_cache(self, data):
+        """Update Redis cache"""
+        try:
+            employee_id = data.get('id') or data.get('employee_id')
+            if employee_id:
+                cache_key = f"employee:{employee_id}"
+                result = self.redis_client.set_employee_cache(cache_key, data)
+                logger.info(f"✅ Cache updated for employee {employee_id}")
+                return result
+            return False
+            
+        except Exception as e:
+            logger.error(f"❌ Error updating cache: {e}")
+            return False
 
-        cached = redis.retrieve_complete(user_id)
-        logger.info(f"📦 Datos cacheados para '{user_id}': {list(cached.keys())}")
-
-        # Corregir la condición para verificar si el usuario tiene todos los tipos
-        if REQUIRED_TYPES.keys() <= cached.keys():
-            logger.info(f"✅ Usuario '{user_id}' completo. Procesando ETL...")
-
-            transformed = {
-                "user_id": user_id,
-                "personal": cached.get("personal", {}),
-                "location": cached.get("location", {}),
-                "professional": cached.get("professional", {}),
-                "bank": cached.get("bank", {}),
-                "net": cached.get("net", {})
-            }
-
-            # ETL opcional
-            # transformed = process_message(transformed)
-
-            sql.store_transformed(transformed)
-            logger.info(f"📤 Usuario '{user_id}' almacenado en SQL.")
-            redis.clear_cache(user_id)
+    def run(self):
+        """Main consumer loop"""
+        logger.info("🚀 Starting HR ETL Consumer...")
+        logger.info("⏳ Waiting for messages...")
+        
+        try:
+            for message in self.consumer:
+                self.process_message(message.value)
+                
+        except KeyboardInterrupt:
+            logger.info("🛑 Consumer stopped by user")
+        except Exception as e:
+            logger.error(f"❌ Consumer error: {e}")
+        finally:
+            self.consumer.close()
+            logger.info("🔚 Consumer closed")
 
 if __name__ == "__main__":
-    run_consumer()
+    # Load environment variables
+    load_dotenv()
+    
+    # Start consumer
+    consumer = HRETLConsumer()
+    consumer.run()
