@@ -61,23 +61,14 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
       REDIS_HOST: redis_consumer
       REDIS_PORT: "6379"
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_HOST: postgres_consumer
-      POSTGRES_PORT: "5432"
+
     volumes:
       - .:/app
     working_dir: /app
     networks:
       - etl-network
     restart: unless-stopped
-    # command: >
-    #   sh -c "
-    #     echo 'Esperando servicios...' &&
-    #     sleep 30 &&
-    #     python -m kafka_consumer.consumer
-    #   "
+
 
 volumes:
   mongo_data:
